@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 
 interface AgentCreationProgressProps {
   isOpen: boolean
-  currentStep: 'validating' | 'uploading' | 'saving' | 'complete' | 'error'
+  currentStep: 'validating' | 'uploading' | 'saving' | 'minting' | 'complete' | 'error'
   errorMessage?: string
   onClose: () => void
 }
@@ -14,13 +14,16 @@ const AgentCreationProgress = ({ isOpen, currentStep, errorMessage, onClose }: A
     // Animate progress bar based on step
     switch (currentStep) {
       case 'validating':
-        setProgress(25)
+        setProgress(20)
         break
       case 'uploading':
-        setProgress(50)
+        setProgress(40)
         break
       case 'saving':
-        setProgress(75)
+        setProgress(60)
+        break
+      case 'minting':
+        setProgress(80)
         break
       case 'complete':
         setProgress(100)
@@ -37,6 +40,7 @@ const AgentCreationProgress = ({ isOpen, currentStep, errorMessage, onClose }: A
     { id: 'validating', label: 'Validating Data', icon: '🔍' },
     { id: 'uploading', label: 'Uploading to IPFS', icon: '📤' },
     { id: 'saving', label: 'Saving Metadata', icon: '💾' },
+    { id: 'minting', label: 'Building Mint TX', icon: '⛓️' },
     { id: 'complete', label: 'Agent Created', icon: '✅' }
   ]
 
@@ -102,8 +106,8 @@ const AgentCreationProgress = ({ isOpen, currentStep, errorMessage, onClose }: A
         {/* Success Message */}
         {currentStep === 'complete' && (
           <div className="success-message">
-            <h3>🎉 Agent Created Successfully!</h3>
-            <p>Your agent has been uploaded to IPFS and is ready to use.</p>
+            <h3>🎉 Agent Created & NFT Ready!</h3>
+            <p>Your agent has been minted as an NFT. Sign with your wallet to complete the transaction.</p>
             <button className="done-btn" onClick={onClose}>View My Agents</button>
           </div>
         )}

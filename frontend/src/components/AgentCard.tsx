@@ -4,21 +4,9 @@ interface AgentCardProps {
   agent: Agent
   selected?: boolean
   onClick?: () => void
-  onSelect?: () => void
-  onChat?: () => void
 }
 
-const AgentCard = ({ agent, selected = false, onClick, onSelect, onChat }: AgentCardProps) => {
-  const handleSelectClick = (e: React.MouseEvent) => {
-    e.stopPropagation()
-    onSelect?.()
-  }
-
-  const handleChatClick = (e: React.MouseEvent) => {
-    e.stopPropagation()
-    onChat?.()
-  }
-
+const AgentCard = ({ agent, selected = false, onClick }: AgentCardProps) => {
   return (
     <div 
       className={`agent-card ${selected ? 'selected' : ''}`}
@@ -47,23 +35,6 @@ const AgentCard = ({ agent, selected = false, onClick, onSelect, onChat }: Agent
 
       {/* Overlay Actions */}
       <div className="card-overlay">
-        <button className="action-btn info-btn" onClick={onClick} title="View details">
-          ℹ️ Details
-        </button>
-        <button 
-          className="action-btn chat-btn"
-          onClick={handleChatClick}
-          title="Chat with agent"
-        >
-          💬 Chat
-        </button>
-        <button 
-          className={`action-btn select-btn ${selected ? 'selected' : ''}`}
-          onClick={handleSelectClick}
-          title="Select for breeding"
-        >
-          {selected ? '✓ Selected' : '🧬 Breed'}
-        </button>
       </div>
 
       <style>{`
@@ -205,28 +176,6 @@ const AgentCard = ({ agent, selected = false, onClick, onSelect, onChat }: Agent
           white-space: nowrap;
         }
 
-        .info-btn {
-          background: rgba(100, 200, 255, 0.2);
-          color: #64c8ff;
-          border: 1px solid #64c8ff;
-        }
-
-        .info-btn:hover {
-          background: #64c8ff;
-          color: #000;
-        }
-
-        .chat-btn {
-          background: rgba(139, 92, 246, 0.2);
-          color: #b78cf4;
-          border: 1px solid #b78cf4;
-        }
-
-        .chat-btn:hover {
-          background: #b78cf4;
-          color: #000;
-        }
-
         .select-btn {
           background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
           color: white;
@@ -239,28 +188,6 @@ const AgentCard = ({ agent, selected = false, onClick, onSelect, onChat }: Agent
 
         .select-btn.selected {
           background: linear-gradient(135deg, #4ade80 0%, #22c55e 100%);
-        }
-
-        @media (max-width: 600px) {
-          .agent-card {
-            min-height: 250px;
-          }
-
-          .agent-icon {
-            font-size: 2.5rem;
-          }
-
-          .card-overlay {
-            transform: translateY(0);
-            position: relative;
-            background: transparent;
-            padding: 1rem 0 0 0;
-          }
-
-          .action-btn {
-            padding: 0.6rem 0.5rem;
-            font-size: 0.8rem;
-          }
         }
       `}</style>
     </div>

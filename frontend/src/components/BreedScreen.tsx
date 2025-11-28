@@ -14,10 +14,96 @@ interface BreedScreenProps {
 
 const BreedScreen = ({ parentA, parentB, walletAddress, onFusionComplete, onBack }: BreedScreenProps) => {
   const [loading, setLoading] = useState(false)
-  const [step, setStep] = useState<'preview' | 'fusing' | 'minting'>('preview')
+  const [step, setStep] = useState<'preview' | 'fusing' | 'minting' | 'signing' | 'submitting' | 'confirming'>('preview')
   const [fusionResult, setFusionResult] = useState<FusionResult | null>(null)
+  const [unsignedTx, setUnsignedTx] = useState<string | null>(null)
+  const [txHash, setTxHash] = useState<string | null>(null)
 
   const predictedSkills = [...new Set([...parentA.skills.slice(0, 3), ...parentB.skills.slice(0, 3)])]
+
+  const handleSignAndSubmit = async () => {
+    if (!unsignedTx) return
+
+    setStep('signing')
+    try {
+      // Check for wallet
+      if (!window.cardano) {
+        throw new Error('No Cardano wallet detected')
+      }
+
+      // Try Lace first, then fallback to Nami/Eternl
+      let walletApi = window.cardano.lace || window.cardano.nami || window.cardano.eternl
+      if (!walletApi) {
+        throw new Error('No supported wallet found (Lace, Nami, or Eternl required)')
+      }
+
+      console.log('🔐 Requesting wallet signature...')
+      
+      // Enable wallet and get API
+      const enabledApi = await walletApi.enable()
+      
+      // Request wallet to sign the transaction
+      const signedTx = await enabledApi.signTx(unsignedTx, true)
+      console.log('✅ Transaction signed by wallet')
+
+      setStep('submitting')
+      
+      // Submit signed transaction to backend
+      const submitResponse = await axios.post('http://localhost:5000/api/submit-breeding-tx', {
+        signedTx,
+        geneticHash: fusionResult?.geneticHash
+      })
+
+      const { txHash: newTxHash } = submitResponse.data
+      setTxHash(newTxHash)
+      console.log(`📦 Transaction submitted: ${newTxHash}`)
+
+      setStep('confirming')
+      
+      // Poll for confirmation
+      let confirmed = false
+      let attempts = 0
+      while (!confirmed && attempts < 60) {
+        await new Promise(resolve => setTimeout(resolve, 2000))
+        
+        try {
+          const statusResponse = await axios.get(`http://localhost:5000/api/tx-status/${newTxHash}`)
+          if (statusResponse.data.confirmed) {
+            confirmed = true
+            console.log('✅ Transaction confirmed on-chain!')
+            alert(`✅ NFT Minted!\n\nTX Hash: ${newTxHash}\n\nView on explorer: https://preprod.cardanoscan.io/transaction/${newTxHash}`)
+          }
+        } catch (err) {
+          console.log(`⏳ Waiting for confirmation... (${attempts + 1}/60)`)
+        }
+        
+        attempts++
+      }
+
+      if (confirmed) {
+        const childAgent: Agent = {
+          id: `child_${Date.now()}`,
+          tokenId: `child_${fusionResult!.geneticHash.substring(0, 8)}`,
+          ...fusionResult!.metadata,
+          ipfsCid: fusionResult!.ipfsCid,
+          geneticHash: fusionResult!.geneticHash,
+          ownerAddress: walletAddress,
+          imageUrl: '👶',
+          minted: true,
+          txHash: newTxHash
+        }
+        onFusionComplete(childAgent)
+      }
+    } catch (error: any) {
+      console.error('Signing/submission error:', error)
+      if (error.message?.includes('User cancelled')) {
+        alert('Transaction signing cancelled')
+      } else {
+        alert(`Error: ${error.message || 'Failed to sign/submit transaction'}`)
+      }
+      setStep('minting')
+    }
+  }
 
   const handleFuse = async () => {
     setLoading(true)
@@ -25,10 +111,11 @@ const BreedScreen = ({ parentA, parentB, walletAddress, onFusionComplete, onBack
 
     try {
       // Call backend fusion API
-      const response = await axios.post<FusionResult>('/api/fuse', {
+      const response = await axios.post<FusionResult>('http://localhost:5000/api/fuse', {
         parentA_token: parentA.tokenId,
         parentB_token: parentB.tokenId,
-        seed: Date.now().toString()
+        seed: Date.now().toString(),
+        ownerAddress: walletAddress
       })
 
       setFusionResult(response.data)
@@ -59,35 +146,21 @@ const BreedScreen = ({ parentA, parentB, walletAddress, onFusionComplete, onBack
           },
           walletAddress,
           ownerAddress: walletAddress,
-          platformAddress: process.env.REACT_APP_PLATFORM_ADDRESS || walletAddress,
+          platformAddress: import.meta.env.VITE_PLATFORM_ADDRESS || walletAddress,
           geneticHash: response.data.geneticHash,
-          scriptAddress: process.env.REACT_APP_SCRIPT_ADDRESS || '',
-          policyId: process.env.REACT_APP_POLICY_ID || ''
+          scriptAddress: import.meta.env.VITE_SCRIPT_ADDRESS || '',
+          policyId: import.meta.env.VITE_POLICY_ID || ''
         })
         
         if (breedingTx.success) {
           console.log('✅ Breeding transaction built successfully')
+          setUnsignedTx(breedingTx.unsignedTx)
         } else {
           console.error('❌ Transaction build failed:', breedingTx.error)
         }
       } catch (err) {
         console.warn('⚠️ Could not build transaction:', err)
       }
-
-      // For demo, simulate successful mint
-      await new Promise(resolve => setTimeout(resolve, 2000))
-
-      const childAgent: Agent = {
-        id: `child_${Date.now()}`,
-        tokenId: `child_${response.data.geneticHash.substring(0, 8)}`,
-        ...response.data.metadata,
-        ipfsCid: response.data.ipfsCid,
-        geneticHash: response.data.geneticHash,
-        ownerAddress: walletAddress,
-        imageUrl: '👶'
-      }
-
-      onFusionComplete(childAgent)
     } catch (error) {
       console.error('Fusion error:', error)
       alert('Fusion failed. Please try again.')
@@ -150,12 +223,60 @@ const BreedScreen = ({ parentA, parentB, walletAddress, onFusionComplete, onBack
       {step === 'minting' && (
         <div className="status-section">
           <div className="spinner">⛏️</div>
-          <h3>Minting NFT...</h3>
-          <p>Creating on-chain transaction on Cardano testnet</p>
+          <h3>Ready to Mint NFT</h3>
+          <p>Sign with your wallet to mint the child agent as an on-chain NFT</p>
           {fusionResult && (
             <div className="fusion-details">
+              <p><strong>Child Name:</strong> {fusionResult.metadata.name}</p>
               <p><strong>IPFS CID:</strong> {fusionResult.ipfsCid}</p>
               <p><strong>Genetic Hash:</strong> {fusionResult.geneticHash.substring(0, 16)}...</p>
+              <p><strong>Network:</strong> Cardano Preprod Testnet</p>
+            </div>
+          )}
+          <button 
+            className="sign-button" 
+            onClick={handleSignAndSubmit}
+            disabled={!unsignedTx || loading}
+          >
+            🔐 Sign with Wallet
+          </button>
+        </div>
+      )}
+
+      {step === 'signing' && (
+        <div className="status-section">
+          <div className="spinner">🔐</div>
+          <h3>Signing Transaction...</h3>
+          <p>Please approve the transaction in your wallet</p>
+        </div>
+      )}
+
+      {step === 'submitting' && (
+        <div className="status-section">
+          <div className="spinner">📤</div>
+          <h3>Submitting to Blockchain...</h3>
+          <p>Sending signed transaction to Cardano preprod</p>
+        </div>
+      )}
+
+      {step === 'confirming' && (
+        <div className="status-section">
+          <div className="spinner">✨</div>
+          <h3>Confirming on-chain...</h3>
+          <p>Waiting for transaction confirmation (2-3 minutes)</p>
+          {txHash && (
+            <div className="fusion-details">
+              <p><strong>TX Hash:</strong> {txHash.substring(0, 20)}...</p>
+              <p>
+                <a 
+                  href={`https://preprod.cardanoscan.io/transaction/${txHash}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  style={{ color: '#667eea', textDecoration: 'underline' }}
+                >
+                  View on CardanoScan →
+                </a>
+              </p>
             </div>
           )}
         </div>
@@ -239,6 +360,28 @@ const BreedScreen = ({ parentA, parentB, walletAddress, onFusionComplete, onBack
         .fuse-action-button:disabled {
           opacity: 0.5;
           cursor: not-allowed;
+        }
+
+        .sign-button {
+          background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+          border: none;
+          color: white;
+          padding: 1rem 3rem;
+          font-size: 1.2rem;
+          font-weight: bold;
+          border-radius: 12px;
+          cursor: pointer;
+          margin-top: 2rem;
+        }
+
+        .sign-button:disabled {
+          opacity: 0.5;
+          cursor: not-allowed;
+        }
+
+        .sign-button:hover:not(:disabled) {
+          transform: scale(1.05);
+          transition: transform 0.2s;
         }
 
         .status-section {

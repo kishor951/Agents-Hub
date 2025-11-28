@@ -9,7 +9,13 @@ interface CreateAgentProps {
   onStartBreeding: (parentA: Agent, parentB: Agent) => void
 }
 
-type ProgressStep = 'validating' | 'uploading' | 'saving' | 'complete' | 'error'
+type ProgressStep = 'validating' | 'uploading' | 'saving' | 'minting' | 'complete' | 'error'
+
+interface MintTransaction {
+  unsignedTx: string
+  txHash: string
+  message: string
+}
 
 const CreateAgent = ({ walletAddress, onAgentCreated, onStartBreeding }: CreateAgentProps) => {
   const [agents, setAgents] = useState<Agent[]>([])
@@ -18,6 +24,8 @@ const CreateAgent = ({ walletAddress, onAgentCreated, onStartBreeding }: CreateA
   const [showProgress, setShowProgress] = useState(false)
   const [progressStep, setProgressStep] = useState<ProgressStep>('validating')
   const [errorMessage, setErrorMessage] = useState('')
+  const [pendingMintTx, setPendingMintTx] = useState<MintTransaction | null>(null)
+  const [createdAgent, setCreatedAgent] = useState<Agent | null>(null)
 
   // Form state for creating agent
   const [formData, setFormData] = useState({
@@ -103,7 +111,19 @@ const CreateAgent = ({ walletAddress, onAgentCreated, onStartBreeding }: CreateA
       setProgressStep('saving')
       await new Promise(resolve => setTimeout(resolve, 800))
 
-      // Step 4: Complete
+      // Step 4: Minting (building NFT transaction)
+      setProgressStep('minting')
+      await new Promise(resolve => setTimeout(resolve, 800))
+
+      const createdAgent = response.data.agent
+      setCreatedAgent(createdAgent)
+
+      if (response.data.mintTx) {
+        console.log('🎁 Mint transaction ready:', response.data.mintTx.txHash)
+        setPendingMintTx(response.data.mintTx)
+      }
+
+      // Step 5: Complete
       setProgressStep('complete')
 
       // Reset form
@@ -120,7 +140,7 @@ const CreateAgent = ({ walletAddress, onAgentCreated, onStartBreeding }: CreateA
       // Reload agents after creation
       setTimeout(() => {
         loadUserAgents()
-        onAgentCreated(response.data.agent)
+        onAgentCreated(createdAgent)
       }, 1500)
 
     } catch (error: any) {
@@ -160,6 +180,135 @@ const CreateAgent = ({ walletAddress, onAgentCreated, onStartBreeding }: CreateA
           setErrorMessage('')
         }}
       />
+
+      {/* Mint Transaction Confirmation Modal */}
+      {pendingMintTx && createdAgent && (
+        <div className="modal-overlay">
+          <div className="modal-content mint-modal">
+            <div className="modal-header">
+              <h2>🎉 Agent Created! Ready to Mint NFT</h2>
+              <p>Your agent "{createdAgent.name}" has been created and is ready to become an NFT.</p>
+            </div>
+
+            <div className="mint-details">
+              <div className="mint-info-row">
+                <span className="label">Transaction Hash:</span>
+                <span className="value">{pendingMintTx.txHash}</span>
+              </div>
+              <div className="mint-info-row">
+                <span className="label">Message:</span>
+                <span className="value">{pendingMintTx.message}</span>
+              </div>
+            </div>
+
+            <div className="mint-actions">
+              <button
+                className="mint-btn primary"
+                onClick={async () => {
+                  try {
+                    if (!pendingMintTx) {
+                      alert('No transaction to sign')
+                      return
+                    }
+
+                    // Check if Cardano wallet is available
+                    if (!window.cardano) {
+                      alert('No Cardano wallet found! Please install Lace wallet from https://www.lace.io/')
+                      return
+                    }
+
+                    // Try to connect to Lace wallet first, fallback to other wallets
+                    let walletApi
+                    let walletName = ''
+
+                    if (window.cardano.lace) {
+                      console.log('🔐 Connecting to Lace wallet...')
+                      walletApi = await window.cardano.lace.enable()
+                      walletName = 'Lace'
+                    } else if (window.cardano.nami) {
+                      console.log('🔐 Connecting to Nami wallet...')
+                      walletApi = await window.cardano.nami.enable()
+                      walletName = 'Nami'
+                    } else if (window.cardano.eternl) {
+                      console.log('🔐 Connecting to Eternl wallet...')
+                      walletApi = await window.cardano.eternl.enable()
+                      walletName = 'Eternl'
+                    } else {
+                      alert('No supported wallet found! Please install Lace, Nami, or Eternl wallet.')
+                      return
+                    }
+
+                    console.log(`✅ Connected to ${walletName} wallet`)
+
+                    // Sign the transaction
+                    console.log('📝 Signing transaction...')
+                    const signedTx = await walletApi.signTx(pendingMintTx.unsignedTx, true)
+                    console.log('✅ Transaction signed!')
+
+                    // Submit to blockchain via backend
+                    console.log('📤 Submitting to blockchain...')
+                    const response = await axios.post('http://localhost:5000/api/submit-tx', {
+                      signedTx
+                    })
+
+                    console.log('✅ Transaction submitted!', response.data)
+                    
+                    alert(
+                      `🎉 NFT Minting Started!\n\n` +
+                      `Transaction: ${response.data.txHash}\n` +
+                      `Network: ${response.data.network || 'preprod'}\n\n` +
+                      `Your NFT will appear in your ${walletName} wallet in 2-3 minutes.\n\n` +
+                      `Check CardanoScan: https://preprod.cardanoscan.io/transaction/${response.data.txHash}`
+                    )
+
+                    // Update agent as minted
+                    if (createdAgent) {
+                      createdAgent.minted = true
+                      createdAgent.txHash = response.data.txHash
+                    }
+
+                    setPendingMintTx(null)
+                    setCreatedAgent(null)
+                    
+                    // Reload agents to show updated status
+                    setTimeout(() => loadUserAgents(), 3000)
+                  } catch (error: any) {
+                    console.error('❌ Wallet signing failed:', error)
+                    if (error.code === -2) {
+                      alert('Transaction cancelled by user.')
+                    } else if (error.message?.includes('User declined')) {
+                      alert('Transaction declined by user.')
+                    } else if (error.message?.includes('insufficient')) {
+                      alert('Insufficient funds! You need testnet ADA.\n\nGet free ADA from: https://docs.cardano.org/cardano-testnets/tools/faucet/')
+                    } else {
+                      alert(`Failed to sign transaction: ${error.message || 'Unknown error'}`)
+                    }
+                  }
+                }}
+              >
+                🔐 Sign with Lace Wallet
+              </button>
+              <button
+                className="mint-btn secondary"
+                onClick={() => {
+                  setPendingMintTx(null)
+                  setCreatedAgent(null)
+                }}
+              >
+                ✓ Done
+              </button>
+            </div>
+
+            <div className="mint-info-box">
+              <p>
+                <strong>ℹ️  What's happening?</strong> Your agent is being minted as an NFT on the Cardano testnet.
+                This NFT will live in your Lace wallet and can be viewed on blockchain explorers.
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="create-agent-container">
         {/* Header */}
         <div className="page-header">
@@ -590,6 +739,141 @@ const CreateAgent = ({ walletAddress, onAgentCreated, onStartBreeding }: CreateA
           .page-header h1 {
             font-size: 2rem;
           }
+        }
+
+        /* Mint Modal Styles */
+        .modal-overlay {
+          position: fixed;
+          top: 0;
+          left: 0;
+          right: 0;
+          bottom: 0;
+          background: rgba(0, 0, 0, 0.7);
+          backdrop-filter: blur(4px);
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          z-index: 1000;
+        }
+
+        .mint-modal {
+          background: linear-gradient(135deg, rgba(30, 41, 59, 0.9) 0%, rgba(15, 23, 42, 0.9) 100%);
+          border: 1px solid rgba(139, 92, 246, 0.3);
+          border-radius: 12px;
+          padding: 2rem;
+          max-width: 500px;
+          width: 90%;
+          box-shadow: 0 20px 25px rgba(0, 0, 0, 0.3);
+        }
+
+        .modal-header {
+          margin-bottom: 1.5rem;
+          text-align: center;
+        }
+
+        .modal-header h2 {
+          color: #e2e8f0;
+          margin: 0 0 0.5rem 0;
+          font-size: 1.5rem;
+        }
+
+        .modal-header p {
+          color: #cbd5e1;
+          margin: 0;
+          font-size: 0.95rem;
+        }
+
+        .mint-details {
+          background: rgba(255, 255, 255, 0.05);
+          border-radius: 8px;
+          padding: 1rem;
+          margin-bottom: 1.5rem;
+        }
+
+        .mint-info-row {
+          display: flex;
+          justify-content: space-between;
+          align-items: flex-start;
+          gap: 1rem;
+          margin-bottom: 0.75rem;
+          padding-bottom: 0.75rem;
+          border-bottom: 1px solid rgba(139, 92, 246, 0.2);
+        }
+
+        .mint-info-row:last-child {
+          margin-bottom: 0;
+          border-bottom: none;
+        }
+
+        .mint-info-row .label {
+          color: #94a3b8;
+          font-size: 0.9rem;
+          font-weight: 500;
+          flex-shrink: 0;
+        }
+
+        .mint-info-row .value {
+          color: #cbd5e1;
+          font-size: 0.85rem;
+          font-family: 'Courier New', monospace;
+          word-break: break-all;
+          text-align: right;
+          flex: 1;
+        }
+
+        .mint-actions {
+          display: flex;
+          gap: 1rem;
+          margin-bottom: 1rem;
+        }
+
+        .mint-btn {
+          flex: 1;
+          padding: 0.875rem;
+          border: none;
+          border-radius: 8px;
+          font-weight: 600;
+          font-size: 0.95rem;
+          cursor: pointer;
+          transition: all 0.2s;
+        }
+
+        .mint-btn.primary {
+          background: linear-gradient(135deg, #8b5cf6 0%, #6d28d9 100%);
+          color: white;
+        }
+
+        .mint-btn.primary:hover {
+          transform: translateY(-2px);
+          box-shadow: 0 4px 12px rgba(139, 92, 246, 0.4);
+        }
+
+        .mint-btn.secondary {
+          background: rgba(139, 92, 246, 0.1);
+          border: 1px solid rgba(139, 92, 246, 0.3);
+          color: #cbd5e1;
+        }
+
+        .mint-btn.secondary:hover {
+          background: rgba(139, 92, 246, 0.15);
+        }
+
+        .mint-info-box {
+          background: rgba(59, 130, 246, 0.1);
+          border: 1px solid rgba(59, 130, 246, 0.3);
+          border-radius: 6px;
+          padding: 0.875rem;
+          font-size: 0.85rem;
+          color: #cbd5e1;
+          line-height: 1.4;
+        }
+
+        .mint-info-box p {
+          margin: 0;
+        }
+
+        .mint-info-box strong {
+          color: #bfdbfe;
         }
       `}</style>
     </div>

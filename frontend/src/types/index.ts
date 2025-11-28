@@ -16,6 +16,8 @@ export interface Agent {
   tokenId?: string
   parents?: [string, string] // parent token IDs
   createdAt?: string
+  minted?: boolean // Whether NFT has been minted on-chain
+  txHash?: string | null // Transaction hash of minting
 }
 
 export interface FusionResult {

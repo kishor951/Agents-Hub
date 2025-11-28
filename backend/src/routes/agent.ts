@@ -1,13 +1,14 @@
 import { Router } from 'express'
 import { QueryRequest } from '../types/index.js'
 import { queryAgent, generatePersonaPrompt } from '../services/llmService.js'
-import { getTokenInfo } from '../services/cardanoService.js'
+import { getTokenInfo, buildMintTransaction } from '../services/cardanoService.js'
 import multer from 'multer'
 import { promises as fs } from 'fs'
 import path from 'path'
 import { fileURLToPath } from 'url'
 import axios from 'axios'
 import FormData from 'form-data'
+import crypto from 'crypto'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
@@ -187,9 +188,12 @@ router.post('/agents/create', upload.single('picture'), async (req, res) => {
     }
 
     // Step 3: Save agent
-    const newAgent = {
-      id: Date.now().toString(),
-      tokenId: `user_${owner.substring(0, 8)}_${Date.now()}`,
+    const agentId = Date.now().toString()
+    const tokenId = `agent_${owner.substring(0, 8)}_${Date.now()}`
+    
+    const newAgent: any = {
+      id: agentId,
+      tokenId,
       name,
       purpose,
       instructions,
@@ -201,19 +205,68 @@ router.post('/agents/create', upload.single('picture'), async (req, res) => {
       ipfsCid,
       imageIpfsCid,
       imageUrl: imageIpfsCid ? `https://gateway.pinata.cloud/ipfs/${imageIpfsCid}` : undefined,
-      createdAt: new Date().toISOString()
+      createdAt: new Date().toISOString(),
+      minted: false,
+      txHash: ''
     }
 
     agentsStore.push(newAgent)
     await saveAgents()
 
-    console.log(`✅ [Create Agent] Success! Agent ID: ${newAgent.id}`)
+    console.log(`✅ [Create Agent] Saved agent: ${newAgent.id}`)
+
+    // Step 4: Build mint transaction for the agent (creation = instant NFT)
+    let mintTxData = null
+    try {
+      // Compute genetic hash for agent (hash of metadata)
+      const geneticData = {
+        name,
+        purpose,
+        instructions,
+        personality,
+        skills: skills ? skills.split(',').map((s: string) => s.trim()) : [],
+        llmModel,
+        timestamp: newAgent.createdAt
+      }
+      const geneticHash = crypto
+        .createHash('sha256')
+        .update(JSON.stringify(geneticData))
+        .digest('hex')
+        .substring(0, 16)
+
+      console.log(`🧬 [Genetic Hash] ${geneticHash}`)
+
+      // Build mint transaction for this agent
+      mintTxData = await buildMintTransaction(
+        owner,
+        ipfsCid || `mock_cid_${Date.now()}`,
+        geneticHash,
+        [tokenId, tokenId] // Parent references (self-created agents)
+      )
+
+      console.log(`💳 [Mint TX] Built: ${mintTxData.txHash}`)
+
+      // Store transaction info with agent
+      newAgent.txHash = mintTxData.txHash
+      await saveAgents()
+    } catch (txError) {
+      console.error('⚠️  [Mint TX] Failed to build transaction:', txError)
+      // Continue - user can still mint later
+      mintTxData = null
+    }
+
+    console.log(`✅ [Create Agent] Complete! Agent ID: ${newAgent.id}`)
 
     res.json({ 
       success: true, 
       agent: newAgent,
       ipfsCid,
-      imageIpfsCid
+      imageIpfsCid,
+      mintTx: mintTxData ? {
+        unsignedTx: mintTxData.unsignedTx,
+        txHash: mintTxData.txHash,
+        message: 'Sign this transaction to mint your agent as an NFT'
+      } : null
     })
   } catch (error) {
     console.error('❌ [Create Agent] Error:', error)
