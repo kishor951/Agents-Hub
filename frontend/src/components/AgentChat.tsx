@@ -121,7 +121,13 @@ const AgentChat = ({ agent, isOpen, onClose }: AgentChatProps) => {
         {/* Header */}
         <div className="chat-header">
           <div className="chat-agent-info">
-            <div className="chat-agent-icon">{agent.imageUrl || '🤖'}</div>
+            <div className="chat-agent-icon">
+              {agent.imageUrl && agent.imageUrl.startsWith('http') ? (
+                <img src={agent.imageUrl} alt={agent.name} className="chat-agent-img" />
+              ) : (
+                agent.imageUrl || '🤖'
+              )}
+            </div>
             <div className="chat-agent-details">
               <h3>{agent.name}</h3>
               <p className="agent-skills">{agent.skills.slice(0, 2).join(' • ')}</p>
@@ -138,7 +144,13 @@ const AgentChat = ({ agent, isOpen, onClose }: AgentChatProps) => {
               className={`chat-message ${msg.role}`}
             >
               {msg.role === 'agent' && (
-                <div className="message-avatar">{agent.imageUrl || '🤖'}</div>
+                <div className="message-avatar">
+                  {agent.imageUrl && agent.imageUrl.startsWith('http') ? (
+                    <img src={agent.imageUrl} alt={agent.name} className="msg-avatar-img" />
+                  ) : (
+                    agent.imageUrl || '🤖'
+                  )}
+                </div>
               )}
               <div className={`message-content ${msg.role}`}>
                 <p>{msg.content}</p>
@@ -150,7 +162,13 @@ const AgentChat = ({ agent, isOpen, onClose }: AgentChatProps) => {
           ))}
           {isLoading && (
             <div className="chat-message agent">
-              <div className="message-avatar">{agent.imageUrl || '🤖'}</div>
+              <div className="message-avatar">
+                {agent.imageUrl && agent.imageUrl.startsWith('http') ? (
+                  <img src={agent.imageUrl} alt={agent.name} className="msg-avatar-img" />
+                ) : (
+                  agent.imageUrl || '🤖'
+                )}
+              </div>
               <div className="message-content agent loading">
                 <div className="typing-indicator">
                   <span></span>
@@ -267,6 +285,31 @@ const AgentChat = ({ agent, isOpen, onClose }: AgentChatProps) => {
           display: flex;
           align-items: center;
           justify-content: center;
+          overflow: hidden;
+        }
+
+        .chat-agent-img {
+          width: 100%;
+          height: 100%;
+          object-fit: cover;
+        }
+
+        .message-avatar {
+          width: 36px;
+          height: 36px;
+          border-radius: 50%;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          font-size: 20px;
+          flex-shrink: 0;
+          overflow: hidden;
+        }
+
+        .msg-avatar-img {
+          width: 100%;
+          height: 100%;
+          object-fit: cover;
         }
 
         .chat-agent-details {

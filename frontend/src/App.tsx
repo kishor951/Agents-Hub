@@ -1,19 +1,21 @@
 import { useState } from 'react'
 import './App.css'
-import WalletConnect from './components/WalletConnect'
 import NavigationBar from './components/NavigationBar'
 import Dashboard from './components/Dashboard'
+import CreateAgent from './components/CreateAgent'
+import AgentDetail from './components/AgentDetail'
 import BreedScreen from './components/BreedScreen'
 import ChildAgentView from './components/ChildAgentView'
 import { Agent } from './types'
 
-type Screen = 'dashboard' | 'breed' | 'child'
+type Screen = 'dashboard' | 'create' | 'agent-detail' | 'breed' | 'child'
 
 function App() {
   const [walletAddress, setWalletAddress] = useState<string | null>(null)
   const [currentScreen, setCurrentScreen] = useState<Screen>('dashboard')
   const [selectedParents, setSelectedParents] = useState<[Agent | null, Agent | null]>([null, null])
   const [childAgent, setChildAgent] = useState<Agent | null>(null)
+  const [selectedAgent, setSelectedAgent] = useState<Agent | null>(null)
 
   const handleWalletConnect = (address: string) => {
     setWalletAddress(address)
@@ -21,6 +23,16 @@ function App() {
 
   const handleWalletDisconnect = () => {
     setWalletAddress(null)
+  }
+
+  const handleViewAgent = (agent: Agent) => {
+    setSelectedAgent(agent)
+    setCurrentScreen('agent-detail')
+  }
+
+  const handleBackToMain = () => {
+    setSelectedAgent(null)
+    setCurrentScreen('dashboard')
   }
 
   const handleStartBreeding = (parentA: Agent, parentB: Agent) => {
@@ -45,6 +57,8 @@ function App() {
         walletAddress={walletAddress} 
         onConnect={handleWalletConnect}
         onDisconnect={handleWalletDisconnect}
+        currentScreen={currentScreen}
+        onScreenChange={setCurrentScreen}
       />
 
 
@@ -59,6 +73,22 @@ function App() {
             {currentScreen === 'dashboard' && (
               <Dashboard 
                 walletAddress={walletAddress} 
+                onStartBreeding={handleStartBreeding}
+                onViewAgent={handleViewAgent}
+              />
+            )}
+            {currentScreen === 'agent-detail' && selectedAgent && (
+              <AgentDetail
+                agent={selectedAgent}
+                onBack={handleBackToMain}
+              />
+            )}
+            {currentScreen === 'create' && (
+              <CreateAgent 
+                walletAddress={walletAddress}
+                onAgentCreated={() => {
+                  setCurrentScreen('dashboard')
+                }}
                 onStartBreeding={handleStartBreeding}
               />
             )}

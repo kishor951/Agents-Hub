@@ -1,13 +1,17 @@
 import { useState, useRef, useEffect } from 'react'
 import WalletConnect from './WalletConnect'
 
+type Screen = 'dashboard' | 'create' | 'breed' | 'child'
+
 interface NavigationBarProps {
   walletAddress: string | null
   onConnect: (address: string) => void
   onDisconnect: () => void
+  currentScreen: string
+  onScreenChange: (screen: Screen) => void
 }
 
-const NavigationBar = ({ walletAddress, onConnect, onDisconnect }: NavigationBarProps) => {
+const NavigationBar = ({ walletAddress, onConnect, onDisconnect, currentScreen, onScreenChange }: NavigationBarProps) => {
   const [showDropdown, setShowDropdown] = useState(false)
   const [showToast, setShowToast] = useState(false)
   const [toastMessage, setToastMessage] = useState('')
@@ -61,12 +65,28 @@ const NavigationBar = ({ walletAddress, onConnect, onDisconnect }: NavigationBar
 
   return (
     <nav className="navigation-bar">
-      {/* Left: Project Name */}
+      {/* Left: Project Name and Navigation */}
       <div className="nav-left">
         <div className="project-name">
           <span className="project-icon">🧬</span>
           <span className="project-title">Agents Hub</span>
         </div>
+        {walletAddress && (
+          <div className="nav-tabs">
+            <button
+              className={`nav-tab ${currentScreen === 'dashboard' ? 'active' : ''}`}
+              onClick={() => onScreenChange('dashboard')}
+            >
+              🧭 Explore Agents
+            </button>
+            <button
+              className={`nav-tab ${currentScreen === 'create' ? 'active' : ''}`}
+              onClick={() => onScreenChange('create')}
+            >
+              ✨ Create Agents
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Right: Wallet Profile */}
@@ -168,17 +188,20 @@ const NavigationBar = ({ walletAddress, onConnect, onDisconnect }: NavigationBar
           display: flex;
           justify-content: space-between;
           align-items: center;
-          padding: 1rem 2rem;
+          padding: 0.875rem 2rem;
           background: linear-gradient(135deg, rgba(139, 92, 246, 0.1) 0%, rgba(99, 102, 241, 0.1) 100%);
           border-bottom: 1px solid rgba(139, 92, 246, 0.2);
           backdrop-filter: blur(10px);
-          margin-bottom: 2rem;
-          border-radius: 0 0 12px 12px;
+          margin-bottom: 0;
+          border-radius: 0;
+          width: 100%;
+          box-sizing: border-box;
         }
 
         .nav-left {
           display: flex;
           align-items: center;
+          gap: 1.5rem;
         }
 
         .project-name {
@@ -194,16 +217,44 @@ const NavigationBar = ({ walletAddress, onConnect, onDisconnect }: NavigationBar
         }
 
         .project-icon {
-          font-size: 1.75rem;
+          font-size: 1.5rem;
         }
 
         .project-title {
-          font-size: 1.5rem;
+          font-size: 1.35rem;
           font-weight: 700;
           background: linear-gradient(135deg, #8b5cf6 0%, #6366f1 100%);
           -webkit-background-clip: text;
           -webkit-text-fill-color: transparent;
           background-clip: text;
+        }
+
+        .nav-tabs {
+          display: flex;
+          gap: 0.75rem;
+        }
+
+        .nav-tab {
+          padding: 0.4rem 0.9rem;
+          background: rgba(255, 255, 255, 0.05);
+          border: 1px solid rgba(139, 92, 246, 0.2);
+          border-radius: 6px;
+          color: #cbd5e1;
+          cursor: pointer;
+          font-weight: 500;
+          font-size: 0.825rem;
+          transition: all 0.2s;
+        }
+
+        .nav-tab:hover {
+          background: rgba(139, 92, 246, 0.1);
+          border-color: rgba(139, 92, 246, 0.4);
+        }
+
+        .nav-tab.active {
+          background: rgba(139, 92, 246, 0.2);
+          border-color: rgba(139, 92, 246, 0.6);
+          color: #e2e8f0;
         }
 
         .nav-right {
@@ -222,11 +273,11 @@ const NavigationBar = ({ walletAddress, onConnect, onDisconnect }: NavigationBar
         .profile-button {
           display: flex;
           align-items: center;
-          gap: 0.75rem;
-          padding: 0.75rem 1rem;
+          gap: 0.6rem;
+          padding: 0.6rem 0.9rem;
           background: rgba(255, 255, 255, 0.05);
           border: 1px solid rgba(139, 92, 246, 0.3);
-          border-radius: 8px;
+          border-radius: 6px;
           cursor: pointer;
           transition: all 0.2s;
           color: #cbd5e1;
@@ -236,18 +287,18 @@ const NavigationBar = ({ walletAddress, onConnect, onDisconnect }: NavigationBar
         .profile-button:hover {
           background: rgba(139, 92, 246, 0.15);
           border-color: rgba(139, 92, 246, 0.5);
-          transform: translateY(-2px);
-          box-shadow: 0 4px 12px rgba(139, 92, 246, 0.2);
+          transform: translateY(-1px);
+          box-shadow: 0 2px 8px rgba(139, 92, 246, 0.2);
         }
 
         .profile-avatar {
-          width: 36px;
-          height: 36px;
+          width: 32px;
+          height: 32px;
           border-radius: 50%;
           display: flex;
           align-items: center;
           justify-content: center;
-          font-size: 1.2rem;
+          font-size: 1rem;
           border: 2px solid rgba(255, 255, 255, 0.2);
         }
 
@@ -257,12 +308,13 @@ const NavigationBar = ({ walletAddress, onConnect, onDisconnect }: NavigationBar
 
         .profile-address {
           font-family: 'Courier New', monospace;
-          font-size: 0.875rem;
+          font-size: 0.8rem;
         }
 
         .dropdown-chevron {
-          font-size: 0.75rem;
+          font-size: 0.7rem;
           transition: transform 0.2s;
+          opacity: 0.7;
         }
 
         /* Dropdown Menu */
@@ -399,8 +451,24 @@ const NavigationBar = ({ walletAddress, onConnect, onDisconnect }: NavigationBar
             margin-bottom: 1.5rem;
           }
 
+          .nav-left {
+            flex-direction: column;
+            align-items: flex-start;
+            gap: 1rem;
+          }
+
           .project-title {
             font-size: 1.25rem;
+          }
+
+          .nav-tabs {
+            width: 100%;
+            justify-content: center;
+          }
+
+          .nav-tab {
+            flex: 1;
+            text-align: center;
           }
 
           .profile-button {

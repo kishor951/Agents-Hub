@@ -25,7 +25,13 @@ const AgentCard = ({ agent, selected = false, onClick, onSelect, onChat }: Agent
       onClick={onClick}
     >
       <div className="card-content">
-        <div className="agent-icon">{agent.imageUrl || '🤖'}</div>
+        <div className="agent-icon">
+          {agent.imageUrl && agent.imageUrl.startsWith('http') ? (
+            <img src={agent.imageUrl} alt={agent.name} className="agent-image" />
+          ) : (
+            agent.imageUrl || '🤖'
+          )}
+        </div>
         <h3>{agent.name}</h3>
         <div className="agent-meta">
           <span className="generation">Gen {agent.generation}</span>
@@ -103,6 +109,18 @@ const AgentCard = ({ agent, selected = false, onClick, onSelect, onChat }: Agent
           font-size: 3.5rem;
           margin-bottom: 1rem;
           transition: transform 0.3s ease;
+          height: 100px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+        }
+
+        .agent-image {
+          width: 100%;
+          height: 100%;
+          object-fit: cover;
+          border-radius: 8px;
+          border: 2px solid rgba(100, 200, 255, 0.3);
         }
 
         .agent-card:hover .agent-icon {

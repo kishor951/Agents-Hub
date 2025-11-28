@@ -46,15 +46,15 @@ const BreedScreen = ({ parentA, parentB, walletAddress, onFusionComplete, onBack
       try {
         const breedingTx = await meshCardanoService.buildBreedingTransaction({
           parentA: {
-            input: { txHash: parentA.geneticHash.substring(0, 64), outputIndex: 0 },
+            input: { txHash: (parentA.geneticHash || 'mock_hash_a').substring(0, 64), outputIndex: 0 },
             output: { address: walletAddress, amount: [] }
           },
           parentB: {
-            input: { txHash: parentB.geneticHash.substring(0, 64), outputIndex: 0 },
+            input: { txHash: (parentB.geneticHash || 'mock_hash_b').substring(0, 64), outputIndex: 0 },
             output: { address: walletAddress, amount: [] }
           },
           breedingFeeUTXO: {
-            input: { txHash: response.data.geneticHash.substring(0, 64), outputIndex: 0 },
+            input: { txHash: (response.data.geneticHash || 'mock_hash_fee').substring(0, 64), outputIndex: 0 },
             output: { address: walletAddress, amount: [] }
           },
           walletAddress,

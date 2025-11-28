@@ -58,7 +58,7 @@ const ChildAgentView = ({ agent, onBack }: ChildAgentViewProps) => {
             <strong>Generation:</strong> {agent.generation}
           </div>
           <div className="metadata-item">
-            <strong>Genetic Hash:</strong> {agent.geneticHash.substring(0, 32)}...
+            <strong>Genetic Hash:</strong> {(agent.geneticHash || 'N/A').substring(0, 32)}...
           </div>
           <div className="metadata-item">
             <strong>IPFS CID:</strong> 

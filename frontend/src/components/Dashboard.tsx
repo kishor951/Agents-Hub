@@ -1,81 +1,40 @@
 import { useState, useEffect } from 'react'
 import { Agent } from '../types'
 import AgentCard from './AgentCard'
-import AgentDetailModal from './AgentDetailModal'
 import SelectionToast from './SelectionToast'
 import ComparisonScreen from './ComparisonScreen'
 import FusionProgression from './FusionProgression'
 import AgentChat from './AgentChat'
+import axios from 'axios'
 
 interface DashboardProps {
   walletAddress: string
   onStartBreeding: (parentA: Agent, parentB: Agent) => void
+  onViewAgent: (agent: Agent) => void
 }
 
-// Agent configuration loader
-const loadAgentConfigs = async (): Promise<{ [key: string]: any }> => {
-  try {
-    // In production, this would fetch from an API or load from public assets
-    // For now, we'll load from a centralized config or API endpoint
-    const response = await fetch('/api/agents/configs')
-    if (response.ok) {
-      return await response.json()
-    }
-  } catch (error) {
-    console.warn('Failed to load agent configs from API, using fallback')
-  }
 
-  // Fallback: return empty object - agents will be loaded differently
-  return {}
-}
 
-// Generate mock agents from configs (for demo purposes)
-const generateMockAgents = (configs: { [key: string]: any }, walletAddress: string): (Agent & { fullData?: any })[] => {
-  return Object.entries(configs).map(([key, config], index) => ({
-    id: (index + 1).toString(),
-    tokenId: `${key}-001`,
-    name: config.name,
-    skills: [
-      ...config.skills?.languages?.map((lang: any) => lang.name) || [],
-      ...config.specialization?.focus_areas?.slice(0, 3) || []
-    ],
-    personaPrompt: config.description || `${config.name} - ${config.specialization?.primary_domain}`,
-    generation: config.metadata?.generation || 0,
-    geneticHash: `hash_${key}_001`,
-    ownerAddress: walletAddress,
-    imageUrl: '🤖',
-    fullData: config
-  }))
-}
-
-const Dashboard = ({ walletAddress, onStartBreeding }: DashboardProps) => {
-  const [agents, setAgents] = useState<(Agent & { fullData?: any })[]>([])
-  const [selectedAgents, setSelectedAgents] = useState<(Agent & { fullData?: any })[]>([])
-  const [detailModalOpen, setDetailModalOpen] = useState(false)
-  const [selectedAgentForDetail, setSelectedAgentForDetail] = useState<(Agent & { fullData?: any }) | null>(null)
+const Dashboard = ({ walletAddress, onStartBreeding, onViewAgent }: DashboardProps) => {
+  const [agents, setAgents] = useState<Agent[]>([])
+  const [selectedAgents, setSelectedAgents] = useState<Agent[]>([])
   const [showComparison, setShowComparison] = useState(false)
   const [showFusionProgression, setShowFusionProgression] = useState(false)
-  const [fusionAgents, setFusionAgents] = useState<[(Agent & { fullData?: any }), (Agent & { fullData?: any })] | null>(null)
-  const [chatAgent, setChatAgent] = useState<(Agent & { fullData?: any }) | null>(null)
+  const [fusionAgents, setFusionAgents] = useState<[Agent, Agent] | null>(null)
   const [showChat, setShowChat] = useState(false)
+  const [chatAgent, setChatAgent] = useState<(Agent & { fullData?: any }) | null>(null)
 
   useEffect(() => {
     const loadAgents = async () => {
       try {
-        // Try to load configs dynamically
-        const configs = await loadAgentConfigs()
+        // Fetch user-created agents from backend
+        const response = await axios.get(`http://localhost:5000/api/agents?owner=${walletAddress}`)
+        const userAgents = response.data.agents || []
         
-        if (Object.keys(configs).length > 0) {
-          // Generate agents from loaded configs
-          const agentsWithOwner = generateMockAgents(configs, walletAddress)
-          setAgents(agentsWithOwner)
-        } else {
-          // No predefined agents - users create their own
-          setAgents([])
-        }
+        console.log(`📋 Loaded ${userAgents.length} agents for dashboard`)
+        setAgents(userAgents)
       } catch (error) {
         console.error('Failed to load agents:', error)
-        // No agents available
         setAgents([])
       }
     }
@@ -83,9 +42,8 @@ const Dashboard = ({ walletAddress, onStartBreeding }: DashboardProps) => {
     loadAgents()
   }, [walletAddress])
 
-  const handleAgentCardClick = (agent: Agent & { fullData?: any }) => {
-    setSelectedAgentForDetail(agent)
-    setDetailModalOpen(true)
+  const handleAgentCardClick = (agent: Agent) => {
+    onViewAgent(agent)
   }
 
   const handleSelectAgent = (agent: Agent & { fullData?: any }) => {
@@ -162,9 +120,9 @@ const Dashboard = ({ walletAddress, onStartBreeding }: DashboardProps) => {
           <div className="empty-icon">🤖</div>
           <h3>No Agents Yet</h3>
           <p>Start building your AI agent collection by creating your first agent.</p>
-          <button className="create-agent-btn">
-            🧬 Create Your First Agent
-          </button>
+          <p style={{ fontSize: '0.9rem', color: '#94a3b8', marginTop: '1rem' }}>
+            💡 Tip: Go to the "✨ Create Agents" tab to build your first one!
+          </p>
         </div>
       ) : (
         <div className="agents-grid">
@@ -179,20 +137,6 @@ const Dashboard = ({ walletAddress, onStartBreeding }: DashboardProps) => {
             />
           ))}
         </div>
-      )}
-
-      {/* Detail Modal */}
-      {selectedAgentForDetail && (
-        <AgentDetailModal
-          agent={selectedAgentForDetail}
-          isOpen={detailModalOpen}
-          onClose={() => {
-            setDetailModalOpen(false)
-            setSelectedAgentForDetail(null)
-          }}
-          isSelected={isAgentSelected(selectedAgentForDetail.id)}
-          onSelect={handleSelectAgent}
-        />
       )}
 
       {/* Selection Toast */}
@@ -239,22 +183,22 @@ const Dashboard = ({ walletAddress, onStartBreeding }: DashboardProps) => {
 
       <style>{`
         .dashboard {
-          padding: 2rem;
+          padding: 1.5rem 2rem 2rem 2rem;
         }
 
         .subtitle {
           color: #888;
-          margin-bottom: 2rem;
-          font-size: 1rem;
+          margin: 0 0 1.5rem 0;
+          font-size: 0.95rem;
         }
 
         .empty-state {
           text-align: center;
-          padding: 4rem 2rem;
+          padding: 3rem 2rem;
           background: rgba(255, 255, 255, 0.02);
           border-radius: 16px;
           border: 2px dashed rgba(139, 92, 246, 0.3);
-          margin: 2rem 0;
+          margin: 0;
         }
 
         .empty-icon {
@@ -271,8 +215,8 @@ const Dashboard = ({ walletAddress, onStartBreeding }: DashboardProps) => {
 
         .empty-state p {
           color: #888;
-          margin-bottom: 2rem;
-          font-size: 1.1rem;
+          margin-bottom: 1.5rem;
+          font-size: 1rem;
           max-width: 400px;
           margin-left: auto;
           margin-right: auto;
@@ -282,9 +226,9 @@ const Dashboard = ({ walletAddress, onStartBreeding }: DashboardProps) => {
           background: linear-gradient(135deg, #8b5cf6 0%, #6366f1 100%);
           color: white;
           border: none;
-          padding: 1rem 2rem;
+          padding: 0.9rem 2rem;
           border-radius: 8px;
-          font-size: 1.1rem;
+          font-size: 1rem;
           font-weight: 600;
           cursor: pointer;
           transition: all 0.2s;
@@ -299,7 +243,7 @@ const Dashboard = ({ walletAddress, onStartBreeding }: DashboardProps) => {
           display: grid;
           grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
           gap: 1.5rem;
-          margin-bottom: 2rem;
+          margin: 0;
         }
 
         @media (max-width: 768px) {

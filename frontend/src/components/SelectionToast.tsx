@@ -22,7 +22,13 @@ const SelectionToast = ({ selectedAgents, onViewComparison, onClear, onRemoveAge
           <div className="selected-agents-display">
             {selectedAgents.map((agent) => (
               <div key={agent.id} className="selected-agent-item">
-                <span className="agent-emoji">{agent.imageUrl || '🤖'}</span>
+                <span className="agent-emoji">
+                  {agent.imageUrl && agent.imageUrl.startsWith('http') ? (
+                    <img src={agent.imageUrl} alt={agent.name} className="agent-toast-img" />
+                  ) : (
+                    agent.imageUrl || '🤖'
+                  )}
+                </span>
                 <span className="agent-name">{agent.name}</span>
                 <button
                   className="remove-btn"
@@ -131,6 +137,18 @@ const SelectionToast = ({ selectedAgents, onViewComparison, onClear, onRemoveAge
 
           .agent-emoji {
             font-size: 1.2rem;
+            width: 28px;
+            height: 28px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+          }
+
+          .agent-toast-img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            border-radius: 4px;
           }
 
           .agent-name {

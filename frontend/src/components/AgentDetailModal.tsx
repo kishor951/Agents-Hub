@@ -30,7 +30,13 @@ const AgentDetailModal = ({ agent, isOpen, onClose, isSelected, onSelect }: Agen
         {/* Header */}
         <div className="modal-header">
           <div className="agent-header-info">
-            <div className="agent-avatar-large">{agent.imageUrl || '🤖'}</div>
+            <div className="agent-avatar-large">
+              {agent.imageUrl && agent.imageUrl.startsWith('http') ? (
+                <img src={agent.imageUrl} alt={agent.name} className="agent-header-image" />
+              ) : (
+                agent.imageUrl || '🤖'
+              )}
+            </div>
             <div className="agent-header-text">
               <h2>{agent.name}</h2>
               <p className="agent-type">{specialization.primary_domain || 'General Agent'}</p>
@@ -283,6 +289,19 @@ const AgentDetailModal = ({ agent, isOpen, onClose, isSelected, onSelect }: Agen
           font-size: 4rem;
           min-width: 80px;
           text-align: center;
+          height: 100px;
+          width: 100px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+        }
+
+        .agent-header-image {
+          width: 100%;
+          height: 100%;
+          object-fit: cover;
+          border-radius: 12px;
+          border: 2px solid rgba(100, 200, 255, 0.3);
         }
 
         .agent-header-text h2 {

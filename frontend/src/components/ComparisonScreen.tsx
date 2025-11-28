@@ -88,7 +88,13 @@ const ComparisonScreen = ({ agentA, agentB, onConfirm, onCancel }: ComparisonScr
           <div className="agents-comparison">
             <div className="agent-column">
               <div className="agent-header">
-                <div className="agent-avatar">{agentA.imageUrl || '🤖'}</div>
+                <div className="agent-avatar">
+                  {agentA.imageUrl && agentA.imageUrl.startsWith('http') ? (
+                    <img src={agentA.imageUrl} alt={agentA.name} className="agent-comparison-img" />
+                  ) : (
+                    agentA.imageUrl || '🤖'
+                  )}
+                </div>
                 <h3>{agentA.name}</h3>
                 <p className="agent-domain">
                   {agentA.fullData?.specialization?.primary_domain || 'General'}
@@ -136,7 +142,13 @@ const ComparisonScreen = ({ agentA, agentB, onConfirm, onCancel }: ComparisonScr
 
             <div className="agent-column">
               <div className="agent-header">
-                <div className="agent-avatar">{agentB.imageUrl || '🤖'}</div>
+                <div className="agent-avatar">
+                  {agentB.imageUrl && agentB.imageUrl.startsWith('http') ? (
+                    <img src={agentB.imageUrl} alt={agentB.name} className="agent-comparison-img" />
+                  ) : (
+                    agentB.imageUrl || '🤖'
+                  )}
+                </div>
                 <h3>{agentB.name}</h3>
                 <p className="agent-domain">
                   {agentB.fullData?.specialization?.primary_domain || 'General'}
@@ -442,6 +454,21 @@ const ComparisonScreen = ({ agentA, agentB, onConfirm, onCancel }: ComparisonScr
         .agent-avatar {
           font-size: 3rem;
           margin-bottom: 0.5rem;
+          width: 80px;
+          height: 80px;
+          margin-left: auto;
+          margin-right: auto;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+        }
+
+        .agent-comparison-img {
+          width: 100%;
+          height: 100%;
+          object-fit: cover;
+          border-radius: 8px;
+          border: 2px solid rgba(100, 200, 255, 0.3);
         }
 
         .agent-header h3 {

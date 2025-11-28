@@ -158,7 +158,13 @@ const FusionProgression = ({ agentA, agentB, isOpen, onComplete, onCancel }: Fus
               {/* Parents Info */}
               <div className="parents-info">
                 <div className="parent-agent">
-                  <div className="agent-avatar">{agentA.imageUrl || '🤖'}</div>
+                  <div className="agent-avatar">
+                    {agentA.imageUrl && agentA.imageUrl.startsWith('http') ? (
+                      <img src={agentA.imageUrl} alt={agentA.name} className="agent-fusion-img" />
+                    ) : (
+                      agentA.imageUrl || '🤖'
+                    )}
+                  </div>
                   <div className="agent-name">{agentA.name}</div>
                 </div>
 
@@ -167,7 +173,13 @@ const FusionProgression = ({ agentA, agentB, isOpen, onComplete, onCancel }: Fus
                 </div>
 
                 <div className="parent-agent">
-                  <div className="agent-avatar">{agentB.imageUrl || '🤖'}</div>
+                  <div className="agent-avatar">
+                    {agentB.imageUrl && agentB.imageUrl.startsWith('http') ? (
+                      <img src={agentB.imageUrl} alt={agentB.name} className="agent-fusion-img" />
+                    ) : (
+                      agentB.imageUrl || '🤖'
+                    )}
+                  </div>
                   <div className="agent-name">{agentB.name}</div>
                 </div>
               </div>
@@ -426,6 +438,14 @@ const FusionProgression = ({ agentA, agentB, isOpen, onComplete, onCancel }: Fus
           display: flex;
           align-items: center;
           justify-content: center;
+        }
+
+        .agent-fusion-img {
+          width: 100%;
+          height: 100%;
+          object-fit: cover;
+          border-radius: 6px;
+          border: 2px solid rgba(100, 200, 255, 0.3);
         }
 
         .agent-name {

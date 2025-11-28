@@ -7,7 +7,7 @@
 .app-header {
   text-align: center;
   padding: 0.5rem 2rem;
-  margin-bottom: 2rem;
+  margin-bottom: 0.75rem;
 }
 
 .app-header p {
@@ -18,10 +18,10 @@
 
 .app-main {
   min-height: 500px;
-  max-width: 1280px;
   margin: 0 auto;
-  padding: 0 2rem;
+  padding: 0 0;
   width: 100%;
+  flex: 1;
 }
 
 .app-footer {
@@ -34,7 +34,7 @@
 }
 
 .connect-prompt {
-  padding: 4rem 2rem;
+  padding: 3rem 2rem;
 }
 
 .connect-prompt h2 {

@@ -1,15 +1,21 @@
 export interface Agent {
   id: string
   name: string
+  purpose?: string
+  instructions?: string
+  personality?: string
+  skills: string[]
+  personaPrompt?: string
+  llmModel?: string
+  generation: number
+  geneticHash?: string
+  ipfsCid?: string
+  owner: string
+  ownerAddress?: string // alias for owner
+  imageUrl?: string
   tokenId?: string
   parents?: [string, string] // parent token IDs
-  skills: string[]
-  personaPrompt: string
-  generation: number
-  geneticHash: string
-  ipfsCid?: string
-  ownerAddress: string
-  imageUrl?: string
+  createdAt?: string
 }
 
 export interface FusionResult {

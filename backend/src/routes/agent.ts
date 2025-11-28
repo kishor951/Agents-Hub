@@ -2,8 +2,53 @@ import { Router } from 'express'
 import { QueryRequest } from '../types/index.js'
 import { queryAgent, generatePersonaPrompt } from '../services/llmService.js'
 import { getTokenInfo } from '../services/cardanoService.js'
+import multer from 'multer'
+import { promises as fs } from 'fs'
+import path from 'path'
+import { fileURLToPath } from 'url'
+import axios from 'axios'
+import FormData from 'form-data'
+
+const __filename = fileURLToPath(import.meta.url)
+const __dirname = path.dirname(__filename)
 
 const router = Router()
+
+// Configure multer for file uploads
+const upload = multer({ 
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 5 * 1024 * 1024 } // 5MB limit
+})
+
+// Simple in-memory storage for agents (replace with database later if needed)
+let agentsStore: any[] = []
+
+// Load agents from file on startup
+const AGENTS_FILE = path.join(__dirname, '../../data/agents.json')
+async function loadAgents() {
+  try {
+    const data = await fs.readFile(AGENTS_FILE, 'utf-8')
+    agentsStore = JSON.parse(data)
+    console.log(`✅ Loaded ${agentsStore.length} agents from storage`)
+  } catch (error) {
+    console.log('📝 No existing agents file, starting fresh')
+    agentsStore = []
+  }
+}
+
+// Save agents to file
+async function saveAgents() {
+  try {
+    await fs.mkdir(path.dirname(AGENTS_FILE), { recursive: true })
+    await fs.writeFile(AGENTS_FILE, JSON.stringify(agentsStore, null, 2))
+    console.log(`💾 Saved ${agentsStore.length} agents to storage`)
+  } catch (error) {
+    console.error('❌ Failed to save agents:', error)
+  }
+}
+
+// Initialize agents on startup
+loadAgents()
 
 /**
  * GET /api/agent/:tokenId
@@ -63,6 +108,120 @@ router.post('/agent/query', async (req, res) => {
 })
 
 /**
+ * POST /api/agents/create
+ * Create a new agent with IPFS upload
+ */
+router.post('/agents/create', upload.single('picture'), async (req, res) => {
+  try {
+    const { name, purpose, instructions, personality, skills, llmModel, owner } = req.body
+    const picture = req.file
+
+    console.log(`\n🤖 [Create Agent] Name: ${name}`)
+    console.log(`   Owner: ${owner}`)
+    console.log(`   Picture: ${picture ? 'Yes' : 'No'}`)
+
+    // Step 1: Validate
+    if (!name || !purpose || !instructions || !owner) {
+      return res.status(400).json({ error: 'Missing required fields' })
+    }
+
+    // Step 2: Upload to IPFS (Pinata)
+    let ipfsCid = null
+    let imageIpfsCid = null
+
+    try {
+      const PINATA_API_KEY = process.env.PINATA_API_KEY
+      const PINATA_SECRET_KEY = process.env.PINATA_SECRET_KEY
+
+      // Upload image if provided
+      if (picture && PINATA_API_KEY) {
+        const imageForm = new FormData()
+        imageForm.append('file', picture.buffer, {
+          filename: picture.originalname,
+          contentType: picture.mimetype
+        })
+
+        const imageRes = await axios.post('https://api.pinata.cloud/pinning/pinFileToIPFS', imageForm, {
+          headers: {
+            ...imageForm.getHeaders(),
+            'pinata_api_key': PINATA_API_KEY,
+            'pinata_secret_api_key': PINATA_SECRET_KEY
+          }
+        })
+
+        imageIpfsCid = imageRes.data.IpfsHash
+        console.log(`📤 [IPFS] Image uploaded: ${imageIpfsCid}`)
+      }
+
+      // Upload metadata
+      if (PINATA_API_KEY) {
+        const metadata = {
+          name,
+          purpose,
+          instructions,
+          personality,
+          skills: skills ? skills.split(',').map((s: string) => s.trim()) : [],
+          llmModel,
+          image: imageIpfsCid ? `ipfs://${imageIpfsCid}` : undefined,
+          created: new Date().toISOString()
+        }
+
+        const metadataRes = await axios.post('https://api.pinata.cloud/pinning/pinJSONToIPFS', metadata, {
+          headers: {
+            'Content-Type': 'application/json',
+            'pinata_api_key': PINATA_API_KEY,
+            'pinata_secret_api_key': PINATA_SECRET_KEY
+          }
+        })
+
+        ipfsCid = metadataRes.data.IpfsHash
+        console.log(`📤 [IPFS] Metadata uploaded: ${ipfsCid}`)
+      } else {
+        console.log('⚠️  [IPFS] No Pinata keys - skipping upload (demo mode)')
+        ipfsCid = `mock_cid_${Date.now()}`
+      }
+    } catch (ipfsError) {
+      console.error('❌ [IPFS] Upload failed:', ipfsError)
+      // Continue without IPFS for demo
+      ipfsCid = `mock_cid_${Date.now()}`
+    }
+
+    // Step 3: Save agent
+    const newAgent = {
+      id: Date.now().toString(),
+      tokenId: `user_${owner.substring(0, 8)}_${Date.now()}`,
+      name,
+      purpose,
+      instructions,
+      personality,
+      skills: skills ? skills.split(',').map((s: string) => s.trim()) : [],
+      llmModel,
+      generation: 1,
+      owner,
+      ipfsCid,
+      imageIpfsCid,
+      imageUrl: imageIpfsCid ? `https://gateway.pinata.cloud/ipfs/${imageIpfsCid}` : undefined,
+      createdAt: new Date().toISOString()
+    }
+
+    agentsStore.push(newAgent)
+    await saveAgents()
+
+    console.log(`✅ [Create Agent] Success! Agent ID: ${newAgent.id}`)
+
+    res.json({ 
+      success: true, 
+      agent: newAgent,
+      ipfsCid,
+      imageIpfsCid
+    })
+  } catch (error) {
+    console.error('❌ [Create Agent] Error:', error)
+    res.status(500).json({ error: 'Failed to create agent' })
+  }
+})
+
+/**
  * GET /api/agents
  * List all agents (optional for demo)
  */
@@ -70,29 +229,16 @@ router.get('/agents', async (req, res) => {
   try {
     const { owner } = req.query
 
-    // Mock data for demo
-    const mockAgents = [
-      {
-        id: '1',
-        tokenId: 'agent001',
-        name: 'CodeMaster Alpha',
-        skills: ['Python', 'JavaScript', 'Debugging', 'Code Review'],
-        generation: 0,
-        ownerAddress: owner || 'addr_test1...'
-      },
-      {
-        id: '2',
-        tokenId: 'agent002',
-        name: 'DataWizard Beta',
-        skills: ['Data Analysis', 'SQL', 'Statistics', 'Visualization'],
-        generation: 0,
-        ownerAddress: owner || 'addr_test1...'
-      }
-    ]
+    // Filter agents by owner if provided
+    const filteredAgents = owner 
+      ? agentsStore.filter(agent => agent.owner === owner)
+      : agentsStore
 
-    res.json({ agents: mockAgents })
+    console.log(`📋 [List Agents] Returning ${filteredAgents.length} agents${owner ? ` for owner ${owner}` : ''}`)
+
+    res.json({ agents: filteredAgents })
   } catch (error) {
-    console.error('Agents list error:', error)
+    console.error('❌ Agents list error:', error)
     res.status(500).json({ error: 'Failed to fetch agents' })
   }
 })
