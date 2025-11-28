@@ -2,7 +2,7 @@
 
 **Fuse AI agents, mint NFTs, unleash combined capabilities on Cardano.**
 
-A hackathon MVP demonstrating deterministic agent fusion with on-chain NFT minting on Cardano testnet.
+A production-grade hackathon MVP using **Aiken smart contracts** and **Mesh SDK** for deterministic agent fusion with on-chain NFT minting on Cardano testnet.
 
 ---
 
@@ -11,43 +11,75 @@ A hackathon MVP demonstrating deterministic agent fusion with on-chain NFT minti
 Select two parent AI agents → Execute deterministic fusion → Pin metadata to IPFS → Mint child NFT on Cardano → Demonstrate combined skills via LLM.
 
 **Key Features:**
+- ✅ **Aiken smart contracts** (production-ready validators)
+- ✅ **Mesh SDK integration** (high-level transaction building)
 - ✅ Deterministic fusion algorithm
-- ✅ IPFS metadata pinning
-- ✅ Cardano testnet NFT minting
-- ✅ LLM-powered agent capabilities demo
+- ✅ IPFS metadata pinning (CIP-25 standard)
+- ✅ Cardano testnet NFT minting (EUTXO model)
+- ✅ LLM-powered agent capabilities
 - ✅ 95/5 earnings split (owner/platform)
 
 ---
 
-## 🏗️ Architecture
+## 🏗️ Architecture (3 Layers)
 
+### Layer 1: On-Chain Smart Contracts
 ```
-┌─────────────┐      ┌─────────────┐      ┌──────────────┐
-│   Frontend  │ ───▶ │   Backend   │ ───▶ │   Cardano    │
-│ React+Vite  │      │  Express.js │      │   Testnet    │
-│             │      │             │      │  (Blockfrost)│
-└─────────────┘      └─────────────┘      └──────────────┘
-       │                    │                      
-       │                    ▼                      
-       │             ┌─────────────┐              
-       │             │    IPFS     │              
-       │             │ (nft.storage)│              
-       │             └─────────────┘              
-       │                                          
-       └───▶ Wallet Connect (CIP-30) ────────────┘
+Aiken Validator (breed.ak)
+  ├─ Verify parent NFTs consumed
+  ├─ Check breeding fee (10 ADA)
+  ├─ Validate genetic hash (SHA-256)
+  └─ Confirm owner signature
+  ↓
+Compile to UPLC → plutus.json (CIP-0057 Blueprint)
 ```
 
-**Tech Stack:**
-- **Frontend:** React 18, TypeScript, Vite, Lucid Cardano
-- **Backend:** Node.js, Express, TypeScript
-- **Smart Contracts:** Plutus (simplified for MVP)
-- **IPFS:** nft.storage / Pinata
-- **Blockchain:** Cardano Testnet (Blockfrost API)
-- **AI:** OpenAI GPT (agent runtime)
+### Layer 2: Off-Chain Integration
+```
+Frontend (React + Mesh SDK)
+  ├─ Connect wallet (CIP-30)
+  ├─ Query UTXOs (Blockfrost)
+  ├─ Build transactions (Mesh SDK)
+  └─ Submit to network
+
+Backend (Express + Node)
+  ├─ Fusion algorithm
+  ├─ Metadata generation
+  ├─ IPFS pinning
+  └─ Genetic hash computation
+```
+
+### Layer 3: Frontend & UI
+```
+React 18 + TypeScript + Vite
+  ├─ Agent selection
+  ├─ Breeding flow
+  ├─ Transaction signing
+  └─ Result visualization
+```
+
+**Complete Tech Stack:**
+- **Frontend:** React 18, TypeScript, Vite, **Mesh SDK**, Framer Motion
+- **Backend:** Node.js, Express, TypeScript, OpenAI API
+- **Smart Contracts:** **Aiken**, UPLC, Plutus Blueprint
+- **Blockchain:** Cardano Testnet, EUTXO Model, CIP-30/CIP-25
+- **Storage:** IPFS (nft.storage), Blockfrost API
+
+---
+
+## 📚 Documentation
+
+- **[QUICK_SETUP.md](./QUICK_SETUP.md)** - 15-minute setup guide
+- **[TECH_STACK.md](./TECH_STACK.md)** - Complete technology reference
+- **[ARCHITECTURE_ADVANCED.md](./ARCHITECTURE_ADVANCED.md)** - Deep technical dive
+- **[MESH_SDK_INTEGRATION.md](./MESH_SDK_INTEGRATION.md)** - Integration guide
+- **[DESIGN_SYSTEM.md](./DESIGN_SYSTEM.md)** - UI/UX standards
+- **[WIN_CHECKLIST.md](./WIN_CHECKLIST.md)** - Hackathon strategy
 
 ---
 
 ## 🚀 Quick Start
+
 
 ### Prerequisites
 

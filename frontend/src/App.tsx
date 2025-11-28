@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import './App.css'
 import WalletConnect from './components/WalletConnect'
+import NavigationBar from './components/NavigationBar'
 import Dashboard from './components/Dashboard'
 import BreedScreen from './components/BreedScreen'
 import ChildAgentView from './components/ChildAgentView'
@@ -16,6 +17,10 @@ function App() {
 
   const handleWalletConnect = (address: string) => {
     setWalletAddress(address)
+  }
+
+  const handleWalletDisconnect = () => {
+    setWalletAddress(null)
   }
 
   const handleStartBreeding = (parentA: Agent, parentB: Agent) => {
@@ -36,11 +41,12 @@ function App() {
 
   return (
     <div className="app">
-      <header className="app-header">
-        <h1>🧬 Agents Hub</h1>
-        <p>Fuse AI Agents • Mint NFTs • Cardano Testnet</p>
-        <WalletConnect onConnect={handleWalletConnect} />
-      </header>
+      <NavigationBar 
+        walletAddress={walletAddress} 
+        onConnect={handleWalletConnect}
+        onDisconnect={handleWalletDisconnect}
+      />
+
 
       <main className="app-main">
         {!walletAddress ? (

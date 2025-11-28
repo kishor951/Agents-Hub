@@ -1,121 +1,241 @@
 import { useState, useEffect } from 'react'
 import { Agent } from '../types'
 import AgentCard from './AgentCard'
+import AgentDetailModal from './AgentDetailModal'
+import SelectionToast from './SelectionToast'
+import ComparisonScreen from './ComparisonScreen'
+import FusionProgression from './FusionProgression'
+import AgentChat from './AgentChat'
 
 interface DashboardProps {
   walletAddress: string
   onStartBreeding: (parentA: Agent, parentB: Agent) => void
 }
 
-// Mock data for demo - in production, fetch from backend
-const MOCK_AGENTS: Agent[] = [
-  {
-    id: '1',
-    tokenId: 'agent001',
-    name: 'CodeMaster Alpha',
-    skills: ['Python', 'JavaScript', 'Debugging', 'Code Review'],
-    personaPrompt: 'Expert software engineer with focus on code quality',
-    generation: 0,
-    geneticHash: 'hash_alpha_001',
-    ownerAddress: '',
-    imageUrl: '🤖'
-  },
-  {
-    id: '2',
-    tokenId: 'agent002',
-    name: 'DataWizard Beta',
-    skills: ['Data Analysis', 'SQL', 'Statistics', 'Visualization'],
-    personaPrompt: 'Data scientist specializing in insights and analytics',
-    generation: 0,
-    geneticHash: 'hash_beta_002',
-    ownerAddress: '',
-    imageUrl: '📊'
-  },
-  {
-    id: '3',
-    tokenId: 'agent003',
-    name: 'DesignGuru Gamma',
-    skills: ['UI Design', 'UX Research', 'Prototyping', 'Figma'],
-    personaPrompt: 'Creative designer focused on user experience',
-    generation: 0,
-    geneticHash: 'hash_gamma_003',
-    ownerAddress: '',
-    imageUrl: '🎨'
-  },
-  {
-    id: '4',
-    tokenId: 'agent004',
-    name: 'BlockchainSage Delta',
-    skills: ['Solidity', 'Smart Contracts', 'DeFi', 'Security Audits'],
-    personaPrompt: 'Blockchain expert specializing in secure smart contracts',
-    generation: 0,
-    geneticHash: 'hash_delta_004',
-    ownerAddress: '',
-    imageUrl: '⛓️'
+// Agent configuration loader
+const loadAgentConfigs = async (): Promise<{ [key: string]: any }> => {
+  try {
+    // In production, this would fetch from an API or load from public assets
+    // For now, we'll load from a centralized config or API endpoint
+    const response = await fetch('/api/agents/configs')
+    if (response.ok) {
+      return await response.json()
+    }
+  } catch (error) {
+    console.warn('Failed to load agent configs from API, using fallback')
   }
-]
+
+  // Fallback: return empty object - agents will be loaded differently
+  return {}
+}
+
+// Generate mock agents from configs (for demo purposes)
+const generateMockAgents = (configs: { [key: string]: any }, walletAddress: string): (Agent & { fullData?: any })[] => {
+  return Object.entries(configs).map(([key, config], index) => ({
+    id: (index + 1).toString(),
+    tokenId: `${key}-001`,
+    name: config.name,
+    skills: [
+      ...config.skills?.languages?.map((lang: any) => lang.name) || [],
+      ...config.specialization?.focus_areas?.slice(0, 3) || []
+    ],
+    personaPrompt: config.description || `${config.name} - ${config.specialization?.primary_domain}`,
+    generation: config.metadata?.generation || 0,
+    geneticHash: `hash_${key}_001`,
+    ownerAddress: walletAddress,
+    imageUrl: '🤖',
+    fullData: config
+  }))
+}
 
 const Dashboard = ({ walletAddress, onStartBreeding }: DashboardProps) => {
-  const [agents, setAgents] = useState<Agent[]>([])
-  const [selectedA, setSelectedA] = useState<Agent | null>(null)
-  const [selectedB, setSelectedB] = useState<Agent | null>(null)
+  const [agents, setAgents] = useState<(Agent & { fullData?: any })[]>([])
+  const [selectedAgents, setSelectedAgents] = useState<(Agent & { fullData?: any })[]>([])
+  const [detailModalOpen, setDetailModalOpen] = useState(false)
+  const [selectedAgentForDetail, setSelectedAgentForDetail] = useState<(Agent & { fullData?: any }) | null>(null)
+  const [showComparison, setShowComparison] = useState(false)
+  const [showFusionProgression, setShowFusionProgression] = useState(false)
+  const [fusionAgents, setFusionAgents] = useState<[(Agent & { fullData?: any }), (Agent & { fullData?: any })] | null>(null)
+  const [chatAgent, setChatAgent] = useState<(Agent & { fullData?: any }) | null>(null)
+  const [showChat, setShowChat] = useState(false)
 
   useEffect(() => {
-    // In production, fetch from API: /api/agents?owner=${walletAddress}
-    const agentsWithOwner = MOCK_AGENTS.map(a => ({ ...a, ownerAddress: walletAddress }))
-    setAgents(agentsWithOwner)
+    const loadAgents = async () => {
+      try {
+        // Try to load configs dynamically
+        const configs = await loadAgentConfigs()
+        
+        if (Object.keys(configs).length > 0) {
+          // Generate agents from loaded configs
+          const agentsWithOwner = generateMockAgents(configs, walletAddress)
+          setAgents(agentsWithOwner)
+        } else {
+          // No predefined agents - users create their own
+          setAgents([])
+        }
+      } catch (error) {
+        console.error('Failed to load agents:', error)
+        // No agents available
+        setAgents([])
+      }
+    }
+
+    loadAgents()
   }, [walletAddress])
 
-  const handleSelectAgent = (agent: Agent) => {
-    if (!selectedA) {
-      setSelectedA(agent)
-    } else if (!selectedB && agent.id !== selectedA.id) {
-      setSelectedB(agent)
-    } else if (agent.id === selectedA.id) {
-      setSelectedA(null)
-    } else if (agent.id === selectedB?.id) {
-      setSelectedB(null)
+  const handleAgentCardClick = (agent: Agent & { fullData?: any }) => {
+    setSelectedAgentForDetail(agent)
+    setDetailModalOpen(true)
+  }
+
+  const handleSelectAgent = (agent: Agent & { fullData?: any }) => {
+    setSelectedAgents(prev => {
+      const isAlreadySelected = prev.some(a => a.id === agent.id)
+      if (isAlreadySelected) {
+        return prev.filter(a => a.id !== agent.id)
+      } else if (prev.length < 2) {
+        return [...prev, agent]
+      }
+      return prev
+    })
+  }
+
+  const handleRemoveAgent = (agentId: string) => {
+    setSelectedAgents(prev => prev.filter(a => a.id !== agentId))
+  }
+
+  const handleClearSelection = () => {
+    setSelectedAgents([])
+  }
+
+  const handleViewComparison = () => {
+    if (selectedAgents.length === 2) {
+      setShowComparison(true)
     }
   }
 
-  const handleFuse = () => {
-    if (selectedA && selectedB) {
-      onStartBreeding(selectedA, selectedB)
+  const handleConfirmBreeding = (agentA: Agent, agentB: Agent) => {
+    setFusionAgents([
+      agentA as Agent & { fullData?: any },
+      agentB as Agent & { fullData?: any }
+    ])
+    setShowFusionProgression(true)
+    setShowComparison(false)
+  }
+
+  const handleFusionComplete = () => {
+    // Reset all UI states and go back to main dashboard
+    setShowFusionProgression(false)
+    setFusionAgents(null)
+    setSelectedAgents([])
+    setShowComparison(false)
+    
+    // Call the parent callback
+    if (onStartBreeding && fusionAgents) {
+      setTimeout(() => {
+        onStartBreeding(fusionAgents[0], fusionAgents[1])
+      }, 500)
     }
   }
 
-  const isSelected = (agent: Agent) => {
-    return agent.id === selectedA?.id || agent.id === selectedB?.id
+  const isAgentSelected = (agentId: string) => {
+    return selectedAgents.some(a => a.id === agentId)
+  }
+
+  const handleChatAgent = (agent: Agent & { fullData?: any }) => {
+    setChatAgent(agent)
+    setShowChat(true)
   }
 
   return (
     <div className="dashboard">
       <h2>My Agents</h2>
-      <p className="subtitle">Select two agents to fuse</p>
+      <p className="subtitle">
+        {agents.length === 0 
+          ? "Create your first AI agent to get started with breeding and NFT minting"
+          : "Click an agent to view details, then select two to breed"
+        }
+      </p>
 
-      <div className="selection-status">
-        {selectedA && <div className="selected-badge">Parent A: {selectedA.name}</div>}
-        {selectedB && <div className="selected-badge">Parent B: {selectedB.name}</div>}
-      </div>
-
-      <div className="agents-grid">
-        {agents.map(agent => (
-          <AgentCard 
-            key={agent.id}
-            agent={agent}
-            selected={isSelected(agent)}
-            onClick={() => handleSelectAgent(agent)}
-          />
-        ))}
-      </div>
-
-      {selectedA && selectedB && (
-        <div className="fuse-action">
-          <button className="fuse-button" onClick={handleFuse}>
-            🧬 Fuse Agents
+      {agents.length === 0 ? (
+        <div className="empty-state">
+          <div className="empty-icon">🤖</div>
+          <h3>No Agents Yet</h3>
+          <p>Start building your AI agent collection by creating your first agent.</p>
+          <button className="create-agent-btn">
+            🧬 Create Your First Agent
           </button>
         </div>
+      ) : (
+        <div className="agents-grid">
+          {agents.map(agent => (
+            <AgentCard 
+              key={agent.id}
+              agent={agent}
+              selected={isAgentSelected(agent.id)}
+              onClick={() => handleAgentCardClick(agent)}
+              onSelect={() => handleSelectAgent(agent)}
+              onChat={() => handleChatAgent(agent)}
+            />
+          ))}
+        </div>
       )}
+
+      {/* Detail Modal */}
+      {selectedAgentForDetail && (
+        <AgentDetailModal
+          agent={selectedAgentForDetail}
+          isOpen={detailModalOpen}
+          onClose={() => {
+            setDetailModalOpen(false)
+            setSelectedAgentForDetail(null)
+          }}
+          isSelected={isAgentSelected(selectedAgentForDetail.id)}
+          onSelect={handleSelectAgent}
+        />
+      )}
+
+      {/* Selection Toast */}
+      <SelectionToast
+        selectedAgents={selectedAgents}
+        onViewComparison={handleViewComparison}
+        onClear={handleClearSelection}
+        onRemoveAgent={handleRemoveAgent}
+      />
+
+      {/* Comparison Screen */}
+      {showComparison && selectedAgents.length === 2 && (
+        <ComparisonScreen
+          agentA={selectedAgents[0]}
+          agentB={selectedAgents[1]}
+          onConfirm={handleConfirmBreeding}
+          onCancel={() => setShowComparison(false)}
+        />
+      )}
+
+      {/* Fusion Progression */}
+      {fusionAgents && (
+        <FusionProgression
+          agentA={fusionAgents[0]}
+          agentB={fusionAgents[1]}
+          isOpen={showFusionProgression}
+          onComplete={handleFusionComplete}
+          onCancel={() => {
+            setShowFusionProgression(false)
+            setFusionAgents(null)
+          }}
+        />
+      )}
+
+      {/* Agent Chat */}
+      <AgentChat
+        agent={chatAgent}
+        isOpen={showChat}
+        onClose={() => {
+          setShowChat(false)
+          setChatAgent(null)
+        }}
+      />
 
       <style>{`
         .dashboard {
@@ -125,48 +245,73 @@ const Dashboard = ({ walletAddress, onStartBreeding }: DashboardProps) => {
         .subtitle {
           color: #888;
           margin-bottom: 2rem;
+          font-size: 1rem;
         }
 
-        .selection-status {
-          display: flex;
-          gap: 1rem;
-          justify-content: center;
+        .empty-state {
+          text-align: center;
+          padding: 4rem 2rem;
+          background: rgba(255, 255, 255, 0.02);
+          border-radius: 16px;
+          border: 2px dashed rgba(139, 92, 246, 0.3);
+          margin: 2rem 0;
+        }
+
+        .empty-icon {
+          font-size: 4rem;
+          margin-bottom: 1rem;
+          opacity: 0.6;
+        }
+
+        .empty-state h3 {
+          color: #fff;
+          margin-bottom: 1rem;
+          font-size: 1.5rem;
+        }
+
+        .empty-state p {
+          color: #888;
           margin-bottom: 2rem;
+          font-size: 1.1rem;
+          max-width: 400px;
+          margin-left: auto;
+          margin-right: auto;
         }
 
-        .selected-badge {
-          background: #4ade80;
-          color: #000;
-          padding: 0.5rem 1rem;
+        .create-agent-btn {
+          background: linear-gradient(135deg, #8b5cf6 0%, #6366f1 100%);
+          color: white;
+          border: none;
+          padding: 1rem 2rem;
           border-radius: 8px;
-          font-weight: bold;
+          font-size: 1.1rem;
+          font-weight: 600;
+          cursor: pointer;
+          transition: all 0.2s;
+        }
+
+        .create-agent-btn:hover {
+          transform: translateY(-2px);
+          box-shadow: 0 8px 25px rgba(139, 92, 246, 0.4);
         }
 
         .agents-grid {
           display: grid;
-          grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+          grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
           gap: 1.5rem;
           margin-bottom: 2rem;
         }
 
-        .fuse-action {
-          text-align: center;
+        @media (max-width: 768px) {
+          .agents-grid {
+            grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+          }
         }
 
-        .fuse-button {
-          background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-          border: none;
-          color: white;
-          padding: 1rem 3rem;
-          font-size: 1.2rem;
-          font-weight: bold;
-          cursor: pointer;
-          border-radius: 12px;
-          transition: transform 0.2s;
-        }
-
-        .fuse-button:hover {
-          transform: scale(1.05);
+        @media (max-width: 600px) {
+          .agents-grid {
+            grid-template-columns: 1fr;
+          }
         }
       `}</style>
     </div>

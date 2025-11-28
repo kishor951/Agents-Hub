@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { Agent, FusionResult } from '../types'
 import axios from 'axios'
+import { meshCardanoService } from '../services/meshService'
 import AgentCard from './AgentCard'
 
 interface BreedScreenProps {
@@ -33,15 +34,46 @@ const BreedScreen = ({ parentA, parentB, walletAddress, onFusionComplete, onBack
       setFusionResult(response.data)
       setStep('minting')
 
-      // Call backend to build mint transaction
-      await axios.post('/api/build-mint-tx', {
-        ipfsCid: response.data.ipfsCid,
-        geneticHash: response.data.geneticHash,
-        parents: [parentA.tokenId, parentB.tokenId],
-        ownerAddress: walletAddress
-      })
+      // Step 2: Query parent NFT UTXOs for breeding
+      try {
+        const parentUTXOs = await meshCardanoService.getWalletUTXOs(walletAddress)
+        console.log(`📦 Found ${parentUTXOs.length} UTXOs for breeding`)
+      } catch (err) {
+        console.warn('⚠️ Could not query UTXOs:', err)
+      }
 
-      // In production, sign and submit transaction via wallet
+      // Step 3: Build breeding transaction with Mesh SDK
+      try {
+        const breedingTx = await meshCardanoService.buildBreedingTransaction({
+          parentA: {
+            input: { txHash: parentA.geneticHash.substring(0, 64), outputIndex: 0 },
+            output: { address: walletAddress, amount: [] }
+          },
+          parentB: {
+            input: { txHash: parentB.geneticHash.substring(0, 64), outputIndex: 0 },
+            output: { address: walletAddress, amount: [] }
+          },
+          breedingFeeUTXO: {
+            input: { txHash: response.data.geneticHash.substring(0, 64), outputIndex: 0 },
+            output: { address: walletAddress, amount: [] }
+          },
+          walletAddress,
+          ownerAddress: walletAddress,
+          platformAddress: process.env.REACT_APP_PLATFORM_ADDRESS || walletAddress,
+          geneticHash: response.data.geneticHash,
+          scriptAddress: process.env.REACT_APP_SCRIPT_ADDRESS || '',
+          policyId: process.env.REACT_APP_POLICY_ID || ''
+        })
+        
+        if (breedingTx.success) {
+          console.log('✅ Breeding transaction built successfully')
+        } else {
+          console.error('❌ Transaction build failed:', breedingTx.error)
+        }
+      } catch (err) {
+        console.warn('⚠️ Could not build transaction:', err)
+      }
+
       // For demo, simulate successful mint
       await new Promise(resolve => setTimeout(resolve, 2000))
 

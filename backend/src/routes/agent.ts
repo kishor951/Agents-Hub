@@ -1,6 +1,6 @@
 import { Router } from 'express'
 import { QueryRequest } from '../types/index.js'
-import { queryAgent } from '../services/llmService.js'
+import { queryAgent, generatePersonaPrompt } from '../services/llmService.js'
 import { getTokenInfo } from '../services/cardanoService.js'
 
 const router = Router()
@@ -29,23 +29,35 @@ router.get('/agent/:tokenId', async (req, res) => {
 
 /**
  * POST /api/agent/query
- * Query an agent using LLM
+ * Query an agent using LLM (Open Router + Grok 4.1)
  */
 router.post('/agent/query', async (req, res) => {
   try {
-    const { tokenId, query, personaPrompt, skills }: QueryRequest = req.body
+    const { tokenId, query, personaPrompt, skills, agentName }: QueryRequest & { agentName?: string } = req.body
 
-    if (!query || !personaPrompt || !skills) {
-      return res.status(400).json({ error: 'Missing required fields' })
+    if (!query || !skills || skills.length === 0) {
+      return res.status(400).json({ error: 'Missing required fields: query and skills array' })
     }
 
-    console.log(`🤖 Querying agent ${tokenId}: "${query}"`)
+    console.log(`\n🤖 [Agent Query] Agent: ${tokenId || agentName || 'Unknown'}`)
+    console.log(`   Query: "${query.substring(0, 50)}..."`)
+    console.log(`   Skills: ${skills.join(', ')}`)
 
-    const response = await queryAgent(personaPrompt, skills, query)
+    // Use provided persona prompt or generate one
+    const persona = personaPrompt || generatePersonaPrompt(agentName || tokenId || 'Agent', skills)
 
-    res.json({ response, tokenId })
+    const response = await queryAgent(persona, skills, query)
+
+    console.log(`✅ [Agent Response] Received ${response.length} characters\n`)
+
+    res.json({ 
+      response, 
+      tokenId, 
+      agentName,
+      timestamp: new Date().toISOString()
+    })
   } catch (error) {
-    console.error('Agent query error:', error)
+    console.error('❌ Agent query error:', error)
     res.status(500).json({ error: 'Failed to query agent' })
   }
 })
@@ -82,6 +94,25 @@ router.get('/agents', async (req, res) => {
   } catch (error) {
     console.error('Agents list error:', error)
     res.status(500).json({ error: 'Failed to fetch agents' })
+  }
+})
+
+/**
+ * GET /api/agents/configs
+ * Load agent configurations from the agents directory
+ * Note: This endpoint returns empty since agents are user-created, not predefined
+ */
+router.get('/agents/configs', async (req, res) => {
+  try {
+    // Since agents are user-created and not predefined,
+    // this endpoint returns empty configurations
+    const configs: { [key: string]: any } = {}
+
+    console.log('📊 No predefined agent configurations (agents are user-created)')
+    res.json(configs)
+  } catch (error) {
+    console.error('❌ Agent configs loading error:', error)
+    res.status(500).json({ error: 'Failed to load agent configurations' })
   }
 })
 

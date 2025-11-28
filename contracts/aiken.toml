@@ -1,0 +1,10 @@
+name = "kishor951/agents_hub"
+version = "1.0.0"
+description = "Cardano NFT Agent Breeding Smart Contracts"
+authors = ["Agents Hub Team"]
+
+[[dependencies]]
+name = "aiken-lang/stdlib"
+version = "2.0.0"
+source = "github"
+

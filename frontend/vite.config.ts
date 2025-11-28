@@ -12,4 +12,15 @@ export default defineConfig({
       },
     },
   },
+  resolve: {
+    alias: {
+      crypto: 'crypto-browserify',
+      buffer: 'buffer',
+      util: 'util',
+      events: 'events',
+    },
+  },
+  define: {
+    global: 'globalThis',
+  },
 })
