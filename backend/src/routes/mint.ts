@@ -62,15 +62,15 @@ router.post('/build-mint-tx', async (req, res) => {
  */
 router.post('/submit-tx', async (req, res) => {
   try {
-    const { signedTx } = req.body
+    const { unsignedTx, witnessSet } = req.body
 
-    if (!signedTx) {
-      return res.status(400).json({ error: 'Missing signedTx' })
+    if (!unsignedTx || !witnessSet) {
+      return res.status(400).json({ error: 'Missing unsignedTx or witnessSet' })
     }
 
     console.log('📤 Submitting signed transaction to blockchain...')
-    console.log('   Signed TX length:', signedTx.length)
-    console.log('   Signed TX (first 50 chars):', signedTx.substring(0, 50))
+    console.log('   Unsigned TX length:', unsignedTx.length)
+    console.log('   Witness set length:', witnessSet.length)
 
     // Read BLOCKFROST_PROJECT_ID dynamically (not at module load time)
     const BLOCKFROST_PROJECT_ID = process.env.BLOCKFROST_PROJECT_ID || ''
@@ -92,11 +92,33 @@ router.post('/submit-tx', async (req, res) => {
     const { network, url } = getNetworkConfig()
     console.log(`🌐 Submitting to ${network} network...`)
 
-    // The wallet returns a complete signed transaction - submit directly
-    console.log('📡 Sending to Blockfrost...')
+    // Combine transaction with witness set using CBOR manipulation
+    console.log('🔧 Combining transaction with witnesses...')
+    const cbor = await import('cbor')
+    
+    try {
+      // Decode both the unsigned TX and witness set
+      const unsignedTxDecoded = cbor.default.decode(Buffer.from(unsignedTx, 'hex'))
+      const witnessSetDecoded = cbor.default.decode(Buffer.from(witnessSet, 'hex'))
+      
+      console.log('   Unsigned TX structure:', JSON.stringify(unsignedTxDecoded).substring(0, 200))
+      console.log('   Witness set structure:', JSON.stringify(witnessSetDecoded).substring(0, 200))
+      
+      // Cardano transaction CBOR: [body, witnessSet, valid, auxiliaryData]
+      // Replace the empty witness set (index 1) with the wallet's witnesses
+      unsignedTxDecoded[1] = witnessSetDecoded
+      
+      // Re-encode to CBOR
+      const signedTxHex = cbor.default.encode(unsignedTxDecoded).toString('hex')
+      
+      console.log('✅ Transaction combined successfully')
+      console.log('   Final TX length:', signedTxHex.length)
 
     // The wallet returns a complete signed transaction - submit directly
     console.log('📡 Sending to Blockfrost...')
+
+      console.log('✅ Transaction combined successfully')
+      console.log('   Final TX length:', signedTxHex.length)
 
       // Retry logic for rate limits
       let lastError: any = null
@@ -113,7 +135,7 @@ router.post('/submit-tx', async (req, res) => {
           // Submit transaction to Blockfrost
           const response = await axios.post(
             `${url}/tx/submit`,
-            Buffer.from(signedTx, 'hex'),
+            Buffer.from(signedTxHex, 'hex'),
             {
               headers: {
                 'Content-Type': 'application/cbor',
@@ -168,6 +190,13 @@ router.post('/submit-tx', async (req, res) => {
 
     // All retries failed
     throw lastError
+    } catch (cborError: any) {
+      console.error('❌ Failed to combine transaction:', cborError)
+      return res.status(500).json({
+        error: 'Failed to combine transaction with witnesses',
+        details: cborError.message
+      })
+    }
   } catch (error: any) {
     console.error('❌ Transaction submission error:', error.message)
     res.status(500).json({ 

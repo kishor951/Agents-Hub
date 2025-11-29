@@ -258,21 +258,22 @@ const CreateAgent = ({ walletAddress, onAgentCreated, onStartBreeding }: CreateA
 
                     console.log(`✅ Connected to ${walletName} wallet`)
 
-                    // Sign the transaction (CIP-30: partial=false returns complete signed tx)
+                    // Sign the transaction (CIP-30: partial=true returns witness set)
                     console.log('📝 Signing transaction with wallet...')
                     console.log('   Unsigned TX length:', pendingMintTx.unsignedTx.length)
                     console.log('   Unsigned TX (first 100 chars):', pendingMintTx.unsignedTx.substring(0, 100))
                     
-                    // Set partial=false to get the complete signed transaction (not just witnesses)
-                    const signedTxCbor = await walletApi.signTx(pendingMintTx.unsignedTx, false)
+                    // partial=true returns witness set that backend will combine
+                    const witnessSet = await walletApi.signTx(pendingMintTx.unsignedTx, true)
                     console.log('✅ Transaction signed by wallet!')
-                    console.log('   Signed TX length:', signedTxCbor.length)
-                    console.log('   Signed TX (first 100 chars):', signedTxCbor.substring(0, 100))
+                    console.log('   Witness set length:', witnessSet.length)
+                    console.log('   Witness set (first 100 chars):', witnessSet.substring(0, 100))
 
                     // Submit to blockchain via backend
                     console.log('📤 Submitting to blockchain...')
                     const response = await axios.post('http://localhost:5000/api/submit-tx', {
-                      signedTx: signedTxCbor
+                      unsignedTx: pendingMintTx.unsignedTx,
+                      witnessSet: witnessSet
                     })
 
                     console.log('✅ Transaction submitted!', response.data)
