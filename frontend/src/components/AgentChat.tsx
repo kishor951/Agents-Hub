@@ -59,7 +59,7 @@ const AgentChat = ({ agent, isOpen, onClose }: AgentChatProps) => {
     setError(null)
 
     try {
-      const response = await fetch('http://localhost:5000/api/agent/query', {
+      const response = await fetch('http://localhost:8000/api/agent/query', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'

@@ -47,7 +47,7 @@ const AgentDetailModal = ({ agent, isOpen, onClose, isSelected, onSelect }: Agen
 
     try {
       // Send to backend
-      const response = await axios.post('http://localhost:5000/api/agent/query', {
+      const response = await axios.post('http://localhost:8000/api/agent/query', {
         tokenId: agent.id,
         agentName: agent.name,
         query: inputValue,

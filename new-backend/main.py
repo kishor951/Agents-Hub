@@ -5,7 +5,7 @@ FastAPI application for agent creation and management
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from routes import agent, chat
+from routes import agent, chat, breed
 import os
 from dotenv import load_dotenv
 
@@ -36,6 +36,7 @@ app.add_middleware(
 # Include routers
 app.include_router(agent.router, prefix="/api")
 app.include_router(chat.router, prefix="/api")
+app.include_router(breed.router, prefix="/api")  # Register the breeding router
 
 @app.get("/health")
 def health_check():

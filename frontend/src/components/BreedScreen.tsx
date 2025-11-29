@@ -20,12 +20,15 @@ const BreedScreen = ({ parentA, parentB, onFusionComplete, onBack }: BreedScreen
   const [txHash, setTxHash] = useState<string | null>(null)
   const [currentSentence, setCurrentSentence] = useState(0)
   const [isAnimating, setIsAnimating] = useState(false)
-  const [compatibilityScore, setCompatibilityScore] = useState<{ score: number; analysis: string } | null>(null)
+  const [compatibilityScore, setCompatibilityScore] = useState<{ score: number; analysis: string; predicted_skills?: string[] } | null>(null)
   const [traitBalance, setTraitBalance] = useState(50)
   const [childAgentName, setChildAgentName] = useState('')
   const [imagePreview, setImagePreview] = useState<string | null>(null)
-
-  const predictedSkills = [...new Set([...parentA.skills.slice(0, 3), ...parentB.skills.slice(0, 3)])]
+  
+  // Predicted skills from compatibility calculation, or fallback to combined parent skills
+  const predictedSkills = compatibilityScore?.predicted_skills && compatibilityScore.predicted_skills.length > 0
+    ? compatibilityScore.predicted_skills
+    : [...new Set([...parentA.skills.slice(0, 3), ...parentB.skills.slice(0, 3)])]
 
   // Animate text change every 5 seconds
   useEffect(() => {
@@ -63,7 +66,7 @@ const BreedScreen = ({ parentA, parentB, onFusionComplete, onBack }: BreedScreen
       const metadata = createBredAgentMetadata(
         fusionResult.metadata.name,
         fusionResult.ipfsCid,  // IPFS hash of child genetic data
-        fusionResult.metadata.masumiDid,
+        fusionResult.metadata.masumiDid || '',  // Ensure masumiDid is a string
         parentA.id,  // parent_a_asset_id
         parentB.id,  // parent_b_asset_id
         parentA_gen,
@@ -97,13 +100,11 @@ const BreedScreen = ({ parentA, parentB, onFusionComplete, onBack }: BreedScreen
         skills: fusionResult.metadata.skills || [],  // From breeding result (predicted skills)
         llmModel: fusionResult.metadata.llmModel || '',  // From breeding result (parent A's model)
         generation: childGeneration,
-        xp: 0,
-        breedCount: 0,
+        owner: '',  // Will be set from wallet
         ownerAddress: '',  // Will be set from wallet
         geneticHash: fusionResult.geneticHash,
         ipfsCid: fusionResult.ipfsCid,
         imageUrl: fusionResult.imageIpfsCid ? `ipfs://${fusionResult.imageIpfsCid}` : undefined,
-        masumiDid: fusionResult.metadata.masumiDid,
         parents: [parentA.id, parentB.id] as [string, string],
         minted: true,
         txHash: newTxHash
@@ -126,28 +127,44 @@ const BreedScreen = ({ parentA, parentB, onFusionComplete, onBack }: BreedScreen
     setStep('compatibility')
 
     try {
-      // Call backend API to get compatibility score
-      const compatResponse = await axios.post('http://localhost:5000/api/calculate-compatibility', {
-        parentA: {
-          name: parentA.name,
-          purpose: parentA.purpose,
-          personality: parentA.personality,
-          skills: parentA.skills,
-          instructions: parentA.instructions
+      // Call new Python backend compatibility calculation endpoint
+      console.log('🔍 [Compatibility] Calculating compatibility...')
+      
+      const compatResponse = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:8000'}/api/calculate-compatibility`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
         },
-        parentB: {
-          name: parentB.name,
-          purpose: parentB.purpose,
-          personality: parentB.personality,
-          skills: parentB.skills,
-          instructions: parentB.instructions
-        }
+        body: JSON.stringify({
+          parent_a: {
+            name: parentA.name,
+            purpose: parentA.purpose,
+            personality: parentA.personality,
+            skills: parentA.skills,
+            instructions: parentA.instructions
+          },
+          parent_b: {
+            name: parentB.name,
+            purpose: parentB.purpose,
+            personality: parentB.personality,
+            skills: parentB.skills,
+            instructions: parentB.instructions
+          }
+        })
       })
 
-      setCompatibilityScore({
-        score: compatResponse.data.score,
-        analysis: compatResponse.data.analysis
-      })
+      if (compatResponse.ok) {
+        const data = await compatResponse.json()
+        console.log(`✅ [Compatibility] Score: ${data.score}%`)
+        console.log(`✅ [Compatibility] Predicted skills: ${data.predicted_skills?.join(', ') || 'None'}`)
+        setCompatibilityScore({
+          score: data.score,
+          analysis: data.analysis,
+          predicted_skills: data.predicted_skills || []
+        })
+      } else {
+        throw new Error('Compatibility endpoint returned error')
+      }
       
       // Generate default child name by combining parent names
       const childName = `${parentA.name.split(' ')[0]}-${parentB.name.split(' ')[0]} Gen2`
@@ -155,7 +172,8 @@ const BreedScreen = ({ parentA, parentB, onFusionComplete, onBack }: BreedScreen
       setLoading(false)
     } catch (error) {
       console.error('Compatibility calculation error:', error)
-      // Use dummy data for demo
+      // Fallback to dummy data if API fails
+      console.warn('⚠️ [Compatibility] Using fallback compatibility data')
       setCompatibilityScore({
         score: 87,
         analysis: 'OddJob Synth\'s creative problem-solving combined with EventManager Pro\'s organizational excellence creates a powerful synergy. The child agent will inherit exceptional event ideation capabilities with flawless execution potential. Predicted traits: innovative scheduling, creative contingency planning, and unique vendor coordination strategies.'
@@ -203,9 +221,10 @@ const BreedScreen = ({ parentA, parentB, onFusionComplete, onBack }: BreedScreen
 
     try {
       // Step 1: Get predicted skills from compatibility calculation (if available)
-      // For now, combine parent skills as fallback (current implementation)
-      const predictedSkills = [...new Set([...parentA.skills.slice(0, 3), ...parentB.skills.slice(0, 3)])]
-      // TODO: When compatibility calculation is implemented, use: compatibilityScore?.predicted_skills || predictedSkills
+      // Use predicted skills from compatibility calculation, or fallback to combined parent skills
+      const predictedSkillsForBreeding = compatibilityScore?.predicted_skills && compatibilityScore.predicted_skills.length > 0
+        ? compatibilityScore.predicted_skills
+        : [...new Set([...parentA.skills.slice(0, 3), ...parentB.skills.slice(0, 3)])]
       
       // Step 2: Get custom instructions from textarea (if provided)
       const breedInstructionsTextarea = document.getElementById('breedInstructions') as HTMLTextAreaElement
@@ -218,7 +237,7 @@ const BreedScreen = ({ parentA, parentB, onFusionComplete, onBack }: BreedScreen
         childAgentName.trim(),  // child_name
         traitBalance,  // trait_balance (0-100, kept in schema but NOT used in LLM calls)
         customInstructions || undefined,  // custom_instructions (from textarea)
-        predictedSkills  // predicted_skills
+        predictedSkillsForBreeding  // predicted_skills from compatibility calculation
       )
 
       // Step 4: Upload child image to IPFS AFTER breeding (if provided)
@@ -497,7 +516,7 @@ const BreedScreen = ({ parentA, parentB, onFusionComplete, onBack }: BreedScreen
           <button 
             className="sign-button" 
             onClick={handleSignAndSubmit}
-            disabled={!unsignedTx || loading}
+            disabled={!fusionResult || loading}
           >
             Sign with Wallet
           </button>
@@ -512,13 +531,6 @@ const BreedScreen = ({ parentA, parentB, onFusionComplete, onBack }: BreedScreen
         </div>
       )}
 
-      {step === 'submitting' && (
-        <div className="status-section">
-          <div className="spinner">Submitting</div>
-          <h3>Submitting to Blockchain...</h3>
-          <p>Sending signed transaction to Cardano preprod</p>
-        </div>
-      )}
 
       {step === 'confirming' && (
         <div className="status-section">
