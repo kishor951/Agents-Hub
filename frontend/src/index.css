@@ -1,7 +1,7 @@
 @import './design-tokens.css';
 
 :root {
-  font-family: var(--font-primary), "Space Grotesk", sans-serif;
+  font-family: var(--font-primary), "Space Mono", sans-serif;
   line-height: var(--lh-normal);
   font-weight: var(--fw-regular);
   color-scheme: dark;

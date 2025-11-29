@@ -373,7 +373,9 @@ const CreateAgent = ({ walletAddress, onAgentCreated, onStartBreeding }: CreateA
         {/* Header */}
         <div className="page-header">
           <h1>✨ Create Your AI Agents</h1>
-          <p>Design and build custom AI agents that become NFTs on Cardano</p>
+          <div className="catchy-line">
+            Build the Extraordinary
+          </div>
         </div>
 
         <div className="create-agent-content">
@@ -478,69 +480,6 @@ const CreateAgent = ({ walletAddress, onAgentCreated, onStartBreeding }: CreateA
               </button>
             </div>
           </div>
-
-          {/* My Agents Section */}
-          <div className="my-agents-section">
-            <h2>🤖 My Agents ({agents.length})</h2>
-            {agents.length === 0 ? (
-              <div className="empty-agents">
-                <p>You haven't created any agents yet.</p>
-                <p>Create your first agent above!</p>
-              </div>
-            ) : (
-              <div className="agents-grid">
-                {agents.map(agent => (
-                  <div key={agent.id} className="agent-card">
-                    <div className="agent-header">
-                      <img src={agent.imageUrl || '/default-agent.png'} alt={agent.name} />
-                      <h3>{agent.name}</h3>
-                    </div>
-                    <p>{agent.purpose}</p>
-                    <div className="agent-actions">
-                      <button
-                        className={`select-btn ${selectedParents.includes(agent) ? 'selected' : ''}`}
-                        onClick={() => handleSelectParent(agent)}
-                      >
-                        {selectedParents.includes(agent) ? 'Selected' : 'Select for Breeding'}
-                      </button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-
-            {/* Breeding Section */}
-            {agents.length > 0 && (
-              <div className="breeding-section">
-                <h3>🧬 Breed Your Agents</h3>
-                <div className="selected-parents">
-                  <div className="parent-slot">
-                    <span>Parent A:</span>
-                    {selectedParents[0] ? (
-                      <span>{selectedParents[0].name}</span>
-                    ) : (
-                      <span className="empty">Not selected</span>
-                    )}
-                  </div>
-                  <div className="parent-slot">
-                    <span>Parent B:</span>
-                    {selectedParents[1] ? (
-                      <span>{selectedParents[1].name}</span>
-                    ) : (
-                      <span className="empty">Not selected</span>
-                    )}
-                  </div>
-                </div>
-                <button
-                  className="breed-btn"
-                  disabled={!selectedParents[0] || !selectedParents[1]}
-                  onClick={handleBreedSelected}
-                >
-                  🧬 Breed Selected Agents
-                </button>
-              </div>
-            )}
-          </div>
         </div>
       </div>
 
@@ -563,6 +502,15 @@ const CreateAgent = ({ walletAddress, onAgentCreated, onStartBreeding }: CreateA
           -webkit-background-clip: text;
           -webkit-text-fill-color: transparent;
           margin-bottom: 0.5rem;
+        }
+
+        .catchy-line {
+          font-size: 4rem;
+          color: #FFFFFF;
+          font-weight: 600;
+          text-align: center;
+          margin-bottom: 1rem;
+          font-family: var(--font-headline, 'Tomorrow', sans-serif);
         }
 
         .page-header p {

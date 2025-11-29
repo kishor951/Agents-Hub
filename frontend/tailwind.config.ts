@@ -79,8 +79,8 @@ const config: Config = {
         'color': 'rgba(255, 255, 255, 0.1)',
       },
       fontFamily: {
-        headline: ['Orbitron', 'Space Grotesk', 'sans-serif'],
-        primary: ['Space Grotesk', 'Inter', 'sans-serif'],
+        headline: ['Tomorrow', 'Space Mono', 'sans-serif'],
+        primary: ['Space Mono', 'Inter', 'sans-serif'],
         mono: ['Space Mono', 'JetBrains Mono', 'monospace'],
         sans: ['Inter', 'sans-serif'],
       },

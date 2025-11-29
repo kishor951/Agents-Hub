@@ -20,6 +20,12 @@ const Dashboard = ({ walletAddress, onStartBreeding, onViewAgent }: DashboardPro
   const [showComparison, setShowComparison] = useState(false)
   const [showFusionProgression, setShowFusionProgression] = useState(false)
   const [fusionAgents, setFusionAgents] = useState<[Agent, Agent] | null>(null)
+  const [searchQuery, setSearchQuery] = useState('')
+  const [filteredAgents, setFilteredAgents] = useState<Agent[]>([])
+  const [rotatingWord, setRotatingWord] = useState('Ideate')
+
+  // Rotating words for the feature text
+  const rotatingWords = ['Ideate', 'Innovate', 'Solve', 'Create', 'Discover']
 
   useEffect(() => {
     const loadAgents = async () => {
@@ -30,14 +36,59 @@ const Dashboard = ({ walletAddress, onStartBreeding, onViewAgent }: DashboardPro
         
         console.log(`📋 Loaded ${userAgents.length} agents for dashboard`)
         setAgents(userAgents)
+        setFilteredAgents(userAgents)
       } catch (error) {
         console.error('Failed to load agents:', error)
         setAgents([])
+        setFilteredAgents([])
       }
     }
 
     loadAgents()
   }, [walletAddress])
+
+  // Filter agents based on search query
+  useEffect(() => {
+    if (!agents || !Array.isArray(agents)) {
+      setFilteredAgents([])
+      return
+    }
+    
+    if (!searchQuery.trim()) {
+      setFilteredAgents(agents)
+    } else {
+      const query = searchQuery.toLowerCase()
+      const filtered = agents.filter(agent => {
+        if (!agent) return false
+        
+        try {
+          return (
+            (agent.name && typeof agent.name === 'string' && agent.name.toLowerCase().includes(query)) ||
+            (agent.purpose && typeof agent.purpose === 'string' && agent.purpose.toLowerCase().includes(query)) ||
+            (agent.instructions && typeof agent.instructions === 'string' && agent.instructions.toLowerCase().includes(query)) ||
+            (agent.skills && typeof agent.skills === 'string' && agent.skills.toLowerCase().includes(query))
+          )
+        } catch (error) {
+          console.error('Error filtering agent:', agent, error)
+          return false
+        }
+      })
+      setFilteredAgents(filtered)
+    }
+  }, [searchQuery, agents])
+
+  // Rotate words every 4 seconds
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setRotatingWord(prev => {
+        const currentIndex = rotatingWords.indexOf(prev)
+        const nextIndex = (currentIndex + 1) % rotatingWords.length
+        return rotatingWords[nextIndex]
+      })
+    }, 4000)
+
+    return () => clearInterval(interval)
+  }, [])
 
   const handleAgentCardClick = (agent: Agent) => {
     onViewAgent(agent)
@@ -87,13 +138,50 @@ const Dashboard = ({ walletAddress, onStartBreeding, onViewAgent }: DashboardPro
 
   return (
     <div className="dashboard">
-      <h2>My Agents</h2>
-      <p className="subtitle">
-        {agents.length === 0 
-          ? "Create your first AI agent to get started with breeding and NFT minting"
-          : "Click an agent to view details, then select two to breed"
-        }
-      </p>
+      
+      {/* Plain Text */}
+      <div className="plain-text">
+        <span className="fixed-text">Explore • Chat • </span><span className="rotating-container"><span key={rotatingWord} className="rotating-word">{rotatingWord}</span></span>
+      </div>
+
+      {/* Search Bar */}
+      {agents.length > 0 && (
+        <div className="search-container">
+          <div className="search-input-wrapper">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="search-icon">
+              <circle cx="11" cy="11" r="8"/>
+              <path d="M21 21l-4.35-4.35"/>
+            </svg>
+            <input
+              type="text"
+              placeholder="Search agents by name, description, or skills..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="search-input"
+            />
+            {searchQuery && (
+              <button
+                onClick={() => setSearchQuery('')}
+                className="clear-search"
+                title="Clear search"
+              >
+                ✕
+              </button>
+            )}
+          </div>
+          {searchQuery && (
+            <div className="search-results">
+              {(!filteredAgents || filteredAgents.length === 0) ? (
+                <span className="no-results">No agents found matching "{searchQuery}"</span>
+              ) : (
+                <span className="results-count">
+                  {filteredAgents.length} of {agents.length} agents
+                </span>
+              )}
+            </div>
+          )}
+        </div>
+      )}
 
       {agents.length === 0 ? (
         <div className="empty-state">
@@ -106,7 +194,7 @@ const Dashboard = ({ walletAddress, onStartBreeding, onViewAgent }: DashboardPro
         </div>
       ) : (
         <div className="agents-grid">
-          {agents.map(agent => (
+          {filteredAgents && Array.isArray(filteredAgents) && filteredAgents.map(agent => (
             <AgentCard 
               key={agent.id}
               agent={agent}
@@ -167,6 +255,141 @@ const Dashboard = ({ walletAddress, onStartBreeding, onViewAgent }: DashboardPro
           text-transform: uppercase;
           letter-spacing: 0.1em;
           font-weight: 500;
+        }
+
+        /* Plain Text */
+        .plain-text {
+          font-size: 4rem;
+          font-weight: 600;
+          color: #FFFFFF;
+          text-align: center;
+          margin-bottom: 2rem;
+          font-family: var(--font-headline, 'Tomorrow', sans-serif);
+          display: inline-block;
+          width: 100%;
+        }
+
+        .fixed-text {
+          display: inline;
+        }
+
+        .rotating-container {
+          display: inline-block;
+          width: 140px;
+          text-align: left;
+          vertical-align: top;
+        }
+
+        .rotating-word {
+          color: #06b6d4;
+          animation: fadeIn 0.8s ease-in-out;
+          display: inline-block;
+          width: 100%;
+        }
+
+        @keyframes fadeIn {
+          0% {
+            opacity: 0;
+            transform: translateY(10px);
+          }
+          100% {
+            opacity: 1;
+            transform: translateY(0);
+          }
+        }
+
+        /* Search Container */
+        .search-container {
+          margin-bottom: 2rem;
+        }
+
+        .search-input-wrapper {
+          position: relative;
+          display: flex;
+          align-items: center;
+          background: rgba(255, 255, 255, 0.05);
+          backdrop-filter: blur(10px);
+          -webkit-backdrop-filter: blur(10px);
+          border: 1px solid rgba(255, 255, 255, 0.1);
+          border-radius: 100px;
+          padding: 0.75rem 1.25rem;
+          transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+          box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.1);
+          outline: none;
+        }
+
+        .search-input-wrapper:focus-within {
+          background: rgba(255, 255, 255, 0.08);
+          border-color: rgba(0, 240, 255, 0.4);
+          box-shadow: 0 0 20px rgba(0, 240, 255, 0.3);
+          outline: none;
+        }
+
+        .search-icon {
+          color: var(--color-text-secondary, #8F90A6);
+          margin-right: 0.75rem;
+          flex-shrink: 0;
+        }
+
+        .search-input {
+          flex: 1;
+          background: transparent;
+          border: none;
+          color: var(--color-text-primary, #FFFFFF);
+          font-family: var(--font-mono, 'Space Mono', monospace);
+          font-size: 0.875rem;
+          font-weight: 500;
+          text-transform: uppercase;
+          letter-spacing: 0.05em;
+          outline: none;
+          padding: 0;
+        }
+
+        .search-input:focus,
+        .search-input:focus-visible,
+        .search-input-wrapper:focus,
+        .search-input-wrapper:focus-visible {
+          outline: none !important;
+          box-shadow: none !important;
+        }
+
+        .clear-search {
+          background: none;
+          border: none;
+          color: var(--color-text-secondary, #8F90A6);
+          font-size: 1rem;
+          cursor: pointer;
+          padding: 0.25rem;
+          margin-left: 0.5rem;
+          border-radius: 50%;
+          transition: all 0.2s;
+          flex-shrink: 0;
+        }
+
+        .clear-search:hover {
+          background: rgba(255, 255, 255, 0.1);
+          color: var(--color-text-primary, #FFFFFF);
+        }
+
+        .search-results {
+          margin-top: 0.75rem;
+          text-align: center;
+        }
+
+        .results-count {
+          font-size: 0.75rem;
+          font-family: var(--font-mono, 'Space Mono', monospace);
+          text-transform: uppercase;
+          letter-spacing: 0.05em;
+          color: var(--color-text-secondary, #8F90A6);
+        }
+
+        .no-results {
+          font-size: 0.875rem;
+          font-family: var(--font-mono, 'Space Mono', monospace);
+          text-transform: uppercase;
+          letter-spacing: 0.05em;
+          color: var(--color-danger, #FF5252);
         }
 
         /* Empty State - Holographic Style */

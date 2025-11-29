@@ -4,12 +4,14 @@ import NavigationBar from './components/NavigationBar'
 import Dashboard from './components/Dashboard'
 import CreateAgent from './components/CreateAgent'
 import AgentDetail from './components/AgentDetail'
+import BreedSelection from './components/BreedSelection'
 import BreedScreen from './components/BreedScreen'
 import ChildAgentView from './components/ChildAgentView'
 import WalletTest from './components/WalletTest'
+import MyAgents from './components/MyAgents'
 import { Agent } from './types'
 
-type Screen = 'dashboard' | 'create' | 'agent-detail' | 'breed' | 'child' | 'wallet-test'
+type Screen = 'dashboard' | 'create' | 'agent-detail' | 'breed' | 'child' | 'my-agents' | 'wallet-test'
 
 function App() {
   const [walletAddress, setWalletAddress] = useState<string | null>(null)
@@ -93,6 +95,12 @@ function App() {
                 onStartBreeding={handleStartBreeding}
               />
             )}
+            {currentScreen === 'breed' && !selectedParents[0] && (
+              <BreedSelection 
+                walletAddress={walletAddress}
+                onStartBreeding={handleStartBreeding}
+              />
+            )}
             {currentScreen === 'breed' && selectedParents[0] && selectedParents[1] && (
               <BreedScreen 
                 parentA={selectedParents[0]}
@@ -110,6 +118,9 @@ function App() {
             )}
             {currentScreen === 'wallet-test' && (
               <WalletTest />
+            )}
+            {currentScreen === 'my-agents' && (
+              <MyAgents walletAddress={walletAddress} />
             )}
           </>
         )}

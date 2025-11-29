@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from 'react'
 import WalletConnect from './WalletConnect'
 
-type Screen = 'dashboard' | 'create' | 'breed' | 'child' | 'wallet-test'
+type Screen = 'dashboard' | 'create' | 'agent-detail' | 'breed' | 'child' | 'my-agents' | 'wallet-test'
 
 interface NavigationBarProps {
   walletAddress: string | null
@@ -18,9 +18,6 @@ const NavigationBar = ({ walletAddress, onConnect, onDisconnect, currentScreen, 
   const dropdownRef = useRef<HTMLDivElement>(null)
   const profileButtonRef = useRef<HTMLButtonElement>(null)
   const [dropdownPosition, setDropdownPosition] = useState({ top: 0, right: 0 })
-  const [showPaddingEditor, setShowPaddingEditor] = useState(false)
-  const [navPadding, setNavPadding] = useState(0.09375)
-  const [contentPadding, setContentPadding] = useState(0.09375)
   const [showCreateDropdown, setShowCreateDropdown] = useState(false)
   const createButtonRef = useRef<HTMLDivElement>(null)
 
@@ -68,17 +65,6 @@ const NavigationBar = ({ walletAddress, onConnect, onDisconnect, currentScreen, 
     return `hsl(${hue}, 70%, 60%)`
   }
 
-  // Apply padding changes to CSS
-  const applyPadding = () => {
-    document.documentElement.style.setProperty('--nav-padding', `${navPadding}rem`)
-    document.documentElement.style.setProperty('--content-padding', `${contentPadding}rem`)
-  }
-
-  const handleApply = () => {
-    applyPadding()
-    showToastNotification(`Padding applied: Nav ${navPadding}rem, Content ${contentPadding}rem`)
-  }
-
   return (
     <nav className="navigation-bar">
       <div className="nav-container">
@@ -92,18 +78,6 @@ const NavigationBar = ({ walletAddress, onConnect, onDisconnect, currentScreen, 
 
       {/* Right: Navigation Tabs + Wallet Profile */}
       <div className="nav-right">
-        {/* Padding Editor Toggle */}
-        <button
-          className="padding-editor-toggle"
-          onClick={() => setShowPaddingEditor(!showPaddingEditor)}
-          title="Adjust Padding"
-        >
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-            <circle cx="12" cy="12" r="3"/>
-            <path d="M12 1v6m0 6v6M1 12h6m6 0h6"/>
-          </svg>
-        </button>
-
         {walletAddress && (
           <div className="nav-tabs">
             <button
@@ -134,6 +108,16 @@ const NavigationBar = ({ walletAddress, onConnect, onDisconnect, currentScreen, 
                   <polyline points="6 9 12 15 18 9"/>
                 </svg>
               </button>
+              
+              {/* Page Indicator - Shows below button when not hovering */}
+              {!showCreateDropdown && (currentScreen === 'create' || currentScreen === 'breed') && (
+                <div className="page-indicator-inline">
+                  <span className="indicator-label">
+                    {currentScreen === 'create' ? 'DIY Agent' : 'Breeding'}
+                  </span>
+                </div>
+              )}
+              
               {showCreateDropdown && (
                 <div className="create-dropdown">
                   <button 
@@ -245,6 +229,20 @@ const NavigationBar = ({ walletAddress, onConnect, onDisconnect, currentScreen, 
                     </svg>
                     <span>Test Wallet</span>
                   </button>
+                  <button
+                    className={`dropdown-action my-agents ${currentScreen === 'my-agents' ? 'active' : ''}`}
+                    onClick={() => {
+                      setShowDropdown(false)
+                      onScreenChange('my-agents')
+                    }}
+                  >
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M20.2 7.8l-7.7 7.7-4-4-5.7 5.7"/>
+                      <path d="M15 7h6v6"/>
+                      <path d="M9 18H3v-6"/>
+                    </svg>
+                    <span>My Agents</span>
+                  </button>
                 </div>
 
                 <div className="dropdown-divider"></div>
@@ -276,60 +274,6 @@ const NavigationBar = ({ walletAddress, onConnect, onDisconnect, currentScreen, 
       {showToast && (
         <div className="toast-notification">
           ✅ {toastMessage}
-        </div>
-      )}
-
-      {/* Padding Editor Panel */}
-      {showPaddingEditor && (
-        <div className="padding-editor-panel">
-          <div className="editor-header">
-            <h4>Adjust Padding (rem)</h4>
-            <button className="close-editor" onClick={() => setShowPaddingEditor(false)}>✕</button>
-          </div>
-          <div className="editor-controls">
-            <div className="control-group">
-              <label>Navigation Padding: {navPadding}rem</label>
-              <input
-                type="range"
-                min="0"
-                max="3"
-                step="0.0625"
-                value={navPadding}
-                onChange={(e) => setNavPadding(parseFloat(e.target.value))}
-              />
-              <input
-                type="number"
-                min="0"
-                max="3"
-                step="0.0625"
-                value={navPadding}
-                onChange={(e) => setNavPadding(parseFloat(e.target.value))}
-              />
-            </div>
-            <div className="control-group">
-              <label>Content Padding: {contentPadding}rem</label>
-              <input
-                type="range"
-                min="0"
-                max="3"
-                step="0.0625"
-                value={contentPadding}
-                onChange={(e) => setContentPadding(parseFloat(e.target.value))}
-              />
-              <input
-                type="number"
-                min="0"
-                max="3"
-                step="0.0625"
-                value={contentPadding}
-                onChange={(e) => setContentPadding(parseFloat(e.target.value))}
-              />
-            </div>
-            <button className="apply-btn" onClick={handleApply}>Apply Changes</button>
-            <div className="current-values">
-              <small>Current: Nav {navPadding}rem ({navPadding * 16}px) | Content {contentPadding}rem ({contentPadding * 16}px)</small>
-            </div>
-          </div>
         </div>
       )}
 
@@ -386,7 +330,7 @@ const NavigationBar = ({ walletAddress, onConnect, onDisconnect, currentScreen, 
         .project-title {
           font-size: 1.5rem;
           font-weight: 700;
-          font-family: var(--font-headline, 'Orbitron', sans-serif);
+          font-family: 'Tomorrow', 'Space Mono', sans-serif;
           text-transform: uppercase;
           letter-spacing: 0.05em;
           background: linear-gradient(135deg, #00F0FF 0%, #FFFFFF 100%);
@@ -722,7 +666,7 @@ const NavigationBar = ({ walletAddress, onConnect, onDisconnect, currentScreen, 
 
         .option-desc {
           font-size: 0.625rem;
-          font-family: var(--font-primary, 'Space Grotesk', sans-serif);
+          font-family: var(--font-primary, 'Space Mono', sans-serif);
           color: var(--color-text-secondary, #8F90A6);
           text-transform: none;
         }
@@ -996,6 +940,48 @@ const NavigationBar = ({ walletAddress, onConnect, onDisconnect, currentScreen, 
             opacity: 1;
             transform: translateX(-50%) translateY(0);
           }
+        }
+
+        /* Page Indicator - Shows current Create Agents selection */
+        .page-indicator-inline {
+          position: absolute;
+          top: calc(100% + 0.5rem);
+          left: 50%;
+          transform: translateX(-50%);
+          z-index: 998;
+          animation: indicatorFadeIn 0.3s ease-out;
+          pointer-events: none;
+        }
+
+        .page-indicator-inline .indicator-label {
+          display: inline-block;
+          font-size: 0.625rem;
+          font-weight: 600;
+          font-family: var(--font-mono, 'Space Mono', monospace);
+          text-transform: uppercase;
+          letter-spacing: 0.08em;
+          padding: 0.25rem 0.75rem;
+          border-radius: 100px;
+          background: linear-gradient(135deg, #00F0FF 0%, #00A8CC 100%);
+          color: #0A0B10;
+          box-shadow: 0 4px 20px rgba(0, 240, 255, 0.4), 0 0 40px rgba(0, 240, 255, 0.2);
+          white-space: nowrap;
+        }
+
+        @keyframes indicatorFadeIn {
+          from {
+            opacity: 0;
+            transform: translateX(-50%) translateY(-5px);
+          }
+          to {
+            opacity: 1;
+            transform: translateX(-50%) translateY(0);
+          }
+        }
+
+        /* Ensure nav-tab-wrapper has relative positioning */
+        .nav-tab-wrapper {
+          position: relative;
         }
 
         /* Responsive Design */

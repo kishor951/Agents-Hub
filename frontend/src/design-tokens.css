@@ -1,5 +1,5 @@
 /* 
-  AGENTS HUB - FUTURISTIC GLASSMORPHISM DESIGN SYSTEM
+  Agents Hub - Futuristic Glassmorphism Design System
   v2.0 - Web3 Crypto Aesthetic with Holographic Effects
 */
 
@@ -35,8 +35,8 @@
   /* ========== TYPOGRAPHY ========== */
   
   /* Font Families */
-  --font-headline: "Orbitron", "Space Grotesk", sans-serif;  /* Wide extended sans for hero text */
-  --font-primary: "Space Grotesk", "Inter", system-ui, sans-serif;
+  --font-headline: "Tomorrow", "Space Mono", sans-serif;  /* Wide extended sans for hero text */
+  --font-primary: "Space Mono", "Inter", system-ui, sans-serif;
   --font-mono: "Space Mono", "JetBrains Mono", monospace;  /* Technical UI elements */
   --font-secondary: "Inter", system-ui, sans-serif;
   

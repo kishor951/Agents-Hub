@@ -7,11 +7,45 @@ interface AgentCardProps {
 }
 
 const AgentCard = ({ agent, selected = false, onClick }: AgentCardProps) => {
+  const truncateName = (name: string) => {
+    const maxLength = 18;
+    return name.length > maxLength ? name.slice(0, maxLength - 3) + '...' : name;
+  };
+
+  const getGenerationColor = (generation: number) => {
+    switch (generation) {
+      case 1:
+        return { hex: '#FF6B35', rgb: '255, 107, 53' }; // Orange
+      case 2:
+        return { hex: '#4ECDC4', rgb: '78, 205, 196' }; // Teal
+      case 3:
+        return { hex: '#45B7D1', rgb: '69, 183, 209' }; // Blue
+      case 4:
+        return { hex: '#96CEB4', rgb: '150, 206, 180' }; // Green
+      default:
+        return { hex: '#FECA57', rgb: '254, 202, 87' }; // Yellow for generation 5+
+    }
+  };
+
   return (
     <div 
       className={`agent-card ${selected ? 'selected' : ''}`}
       onClick={onClick}
+      style={{ '--card-bg-color': getGenerationColor(agent.generation).rgb } as React.CSSProperties}
     >
+      {/* Generation Badge - Top Right */}
+      <div className="generation-badge" style={{ backgroundColor: getGenerationColor(agent.generation).hex }}>
+        <svg className="gen-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2z"/>
+          <path d="M12 6v12"/>
+          <path d="M8 10h8"/>
+          <path d="M8 14h8"/>
+          <path d="M10 8h4"/>
+          <path d="M10 16h4"/>
+        </svg>
+        <span className="gen-text">Gen {agent.generation}</span>
+      </div>
+
       <div className="card-content">
         <div className="agent-icon">
           {agent.imageUrl && agent.imageUrl.startsWith('http') ? (
@@ -20,12 +54,10 @@ const AgentCard = ({ agent, selected = false, onClick }: AgentCardProps) => {
             agent.imageUrl || '🤖'
           )}
         </div>
-        <h3>{agent.name}</h3>
+        <h3>{truncateName(agent.name)}</h3>
         <div className="agent-meta">
-          <span className="generation">Gen {agent.generation}</span>
-          {agent.tokenId && <span className="token-id">{agent.tokenId.slice(0, 12)}...</span>}
         </div>
-        <div className="skills">
+        <div className="skills" style={{ '--gen-color-rgb': getGenerationColor(agent.generation).rgb } as React.CSSProperties}>
           {agent.skills.slice(0, 3).map((skill, idx) => (
             <span key={idx} className="skill-badge">{skill}</span>
           ))}
@@ -40,17 +72,12 @@ const AgentCard = ({ agent, selected = false, onClick }: AgentCardProps) => {
       <style>{`
         /* ========== HOLOGRAPHIC AGENT CARD ========== */
         .agent-card {
-          background: linear-gradient(135deg, 
-            rgba(0, 240, 255, 0.08) 0%, 
-            rgba(255, 255, 255, 0.05) 50%, 
-            rgba(0, 240, 255, 0.05) 100%);
-          backdrop-filter: blur(20px);
-          -webkit-backdrop-filter: blur(20px);
-          border: 1px solid rgba(255, 255, 255, 0.1);
+          background: rgba(var(--card-bg-color, 0, 240, 255), 0.08);
+          border: 1px solid rgba(var(--card-bg-color, 0, 240, 255), 0.15);
           border-radius: 20px;
           padding: 2rem;
           cursor: pointer;
-          transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+          transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
           text-align: center;
           position: relative;
           overflow: hidden;
@@ -58,67 +85,27 @@ const AgentCard = ({ agent, selected = false, onClick }: AgentCardProps) => {
           display: flex;
           flex-direction: column;
           justify-content: center;
-          box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
         }
 
-        /* Holographic Shine Effect */
-        .agent-card::before {
-          content: '';
-          position: absolute;
-          top: -50%;
-          left: -50%;
-          width: 200%;
-          height: 200%;
-          background: linear-gradient(
-            45deg,
-            transparent 30%,
-            rgba(255, 255, 255, 0.1) 50%,
-            transparent 70%
-          );
-          animation: holographic-shine 4s ease-in-out infinite;
-          pointer-events: none;
-        }
-
-        @keyframes holographic-shine {
-          0% {
-            transform: translateX(-100%) translateY(-100%) rotate(45deg);
-          }
-          100% {
-            transform: translateX(100%) translateY(100%) rotate(45deg);
-          }
-        }
+        /* Removed holographic shine effect */
 
         /* Hover Effects */
         .agent-card:hover {
-          transform: translateY(-8px) scale(1.02);
-          border-color: rgba(0, 240, 255, 0.5);
-          background: linear-gradient(135deg, 
-            rgba(0, 240, 255, 0.15) 0%, 
-            rgba(255, 255, 255, 0.08) 50%, 
-            rgba(0, 240, 255, 0.1) 100%);
-          box-shadow: 
-            0 0 30px rgba(0, 240, 255, 0.5),
-            0 0 60px rgba(0, 240, 255, 0.3),
-            0 20px 40px rgba(0, 0, 0, 0.5);
+          transform: translateY(-6px);
+          border-color: rgba(var(--card-bg-color, 0, 240, 255), 0.4);
+          background: rgba(var(--card-bg-color, 0, 240, 255), 0.5);
         }
 
         .agent-card.selected {
           border: 2px solid var(--color-primary, #00F0FF);
-          background: linear-gradient(135deg, 
-            rgba(0, 240, 255, 0.2) 0%, 
-            rgba(255, 255, 255, 0.1) 50%, 
-            rgba(0, 240, 255, 0.15) 100%);
-          box-shadow: 
-            0 0 40px rgba(0, 240, 255, 0.8),
-            0 0 80px rgba(0, 240, 255, 0.5),
-            0 20px 50px rgba(0, 0, 0, 0.6);
+          background: rgba(var(--card-bg-color, 0, 240, 255), 0.15);
         }
 
         .agent-card.selected::after {
           content: '✓ SELECTED';
           position: absolute;
           top: 1rem;
-          right: 1rem;
+          left: 1rem;
           padding: 0.5rem 1rem;
           background: rgba(0, 240, 255, 0.9);
           color: var(--color-bg-base, #0A0B10);
@@ -127,29 +114,54 @@ const AgentCard = ({ agent, selected = false, onClick }: AgentCardProps) => {
           font-family: var(--font-mono, 'Space Mono', monospace);
           letter-spacing: 0.1em;
           border-radius: 100px;
-          box-shadow: 0 0 15px rgba(0, 240, 255, 0.8);
+          box-shadow: none;
+        }
+
+        /* Generation Badge - Top Right */
+        .generation-badge {
+          position: absolute;
+          top: 1rem;
+          right: 1rem;
+          display: flex;
+          align-items: center;
+          gap: 0.25rem;
+          color: #0A0B10;
+          padding: 0.375rem 0.75rem;
+          border-radius: 20px;
+          font-size: 0.75rem;
+          font-weight: 700;
+          font-family: var(--font-mono, 'Space Mono', monospace);
+          letter-spacing: 0.05em;
+          box-shadow: 0 2px 8px rgba(0, 240, 255, 0.3);
+          z-index: 3;
+        }
+
+        .gen-icon {
+          width: 16px;
+          height: 16px;
+          flex-shrink: 0;
+        }
+
+        .gen-text {
+          font-weight: 800;
         }
 
         .card-content {
           position: relative;
           z-index: 2;
-          transition: transform 0.4s cubic-bezier(0.4, 0, 0.2, 1);
-        }
-
-        .agent-card:hover .card-content {
-          transform: translateY(-10px);
         }
 
         /* Agent Icon/Avatar */
         .agent-icon {
           font-size: 4.5rem;
           margin-bottom: 1.5rem;
-          transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+          transition: transform 0.3s ease-in-out;
           height: 120px;
           display: flex;
           align-items: center;
           justify-content: center;
-          filter: drop-shadow(0 0 20px rgba(0, 240, 255, 0.6));
+          /* removed drop-shadow to avoid inner glow */
+          filter: none;
         }
 
         .agent-image {
@@ -157,25 +169,23 @@ const AgentCard = ({ agent, selected = false, onClick }: AgentCardProps) => {
           height: 100%;
           object-fit: cover;
           border-radius: 12px;
-          border: 2px solid rgba(0, 240, 255, 0.4);
-          box-shadow: 0 0 30px rgba(0, 240, 255, 0.5);
-        }
-
-        .agent-card:hover .agent-icon {
-          transform: scale(1.15) rotate(5deg);
-          filter: drop-shadow(0 0 30px rgba(0, 240, 255, 0.9));
+          border: 2px solid rgba(0, 240, 255, 0.15);
+          /* removed image glow */
+          box-shadow: none;
         }
 
         /* Agent Name */
         .agent-card h3 {
-          font-size: 1.5rem;
+          font-size: 1.25rem;
           margin: 1rem 0;
           color: var(--color-text-primary, #FFFFFF);
           font-weight: 700;
           font-family: var(--font-headline, 'Orbitron', sans-serif);
-          text-transform: uppercase;
+          text-transform: capitalize;
           letter-spacing: 0.05em;
-          text-shadow: 0 0 15px rgba(0, 240, 255, 0.5);
+          white-space: nowrap;
+          /* remove text shadow for flatter, cleaner feel */
+          text-shadow: none;
         }
 
         /* Metadata Section */
@@ -188,28 +198,6 @@ const AgentCard = ({ agent, selected = false, onClick }: AgentCardProps) => {
           font-family: var(--font-mono, 'Space Mono', monospace);
         }
 
-        .generation {
-          background: rgba(0, 240, 255, 0.15);
-          color: var(--color-primary, #00F0FF);
-          padding: 0.4rem 0.875rem;
-          border-radius: 100px;
-          border: 1px solid rgba(0, 240, 255, 0.4);
-          font-weight: 600;
-          text-transform: uppercase;
-          letter-spacing: 0.05em;
-          box-shadow: 0 0 15px rgba(0, 240, 255, 0.3);
-        }
-
-        .token-id {
-          background: rgba(255, 255, 255, 0.05);
-          padding: 0.4rem 0.875rem;
-          border-radius: 100px;
-          border: 1px solid rgba(255, 255, 255, 0.1);
-          font-family: var(--font-mono, 'Space Mono', monospace);
-          color: var(--color-text-secondary, #8F90A6);
-          letter-spacing: 0.02em;
-        }
-
         /* Skills Section */
         .skills {
           display: flex;
@@ -220,13 +208,11 @@ const AgentCard = ({ agent, selected = false, onClick }: AgentCardProps) => {
         }
 
         .skill-badge {
-          background: linear-gradient(135deg, 
-            rgba(255, 255, 255, 0.15), 
-            rgba(255, 255, 255, 0.05));
-          backdrop-filter: blur(10px);
-          -webkit-backdrop-filter: blur(10px);
-          color: var(--color-text-primary, #FFFFFF);
-          border: 1px solid rgba(255, 255, 255, 0.3);
+          background: rgba(var(--gen-color-rgb, 0, 240, 255), 0.15);
+          backdrop-filter: blur(6px);
+          -webkit-backdrop-filter: blur(6px);
+          color: rgba(255, 255, 255, 0.8);
+          border: 1px solid rgba(var(--gen-color-rgb, 0, 240, 255), 0.25);
           padding: 0.4rem 0.875rem;
           border-radius: 100px;
           font-size: 0.6875rem;
@@ -234,13 +220,12 @@ const AgentCard = ({ agent, selected = false, onClick }: AgentCardProps) => {
           font-family: var(--font-mono, 'Space Mono', monospace);
           text-transform: uppercase;
           letter-spacing: 0.05em;
-          box-shadow: 0 0 10px rgba(255, 255, 255, 0.2);
-          transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+          box-shadow: none;
+          transition: background 0.2s ease;
         }
 
         .skill-badge:hover {
-          transform: translateY(-2px);
-          box-shadow: 0 0 20px rgba(255, 255, 255, 0.4);
+          background: rgba(var(--gen-color-rgb, 0, 240, 255), 0.25);
         }
 
         /* Card Overlay (Hidden by default, shows on hover) */
@@ -249,18 +234,15 @@ const AgentCard = ({ agent, selected = false, onClick }: AgentCardProps) => {
           bottom: 0;
           left: 0;
           right: 0;
-          background: linear-gradient(180deg, 
-            transparent 0%, 
-            rgba(10, 11, 16, 0.95) 60%);
-          backdrop-filter: blur(10px);
-          -webkit-backdrop-filter: blur(10px);
+          /* make overlay fully transparent and remove blur to avoid bottom layer effect */
+          background: transparent;
           padding: 1.5rem;
           display: flex;
           gap: 1rem;
           transform: translateY(100%);
-          transition: transform 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+          transition: transform 0.35s cubic-bezier(0.4, 0, 0.2, 1);
           z-index: 3;
-          border-top: 1px solid rgba(255, 255, 255, 0.1);
+          border-top: none;
         }
 
         .agent-card:hover .card-overlay {
@@ -280,25 +262,20 @@ const AgentCard = ({ agent, selected = false, onClick }: AgentCardProps) => {
           cursor: pointer;
           transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
           white-space: nowrap;
-          backdrop-filter: blur(10px);
-          -webkit-backdrop-filter: blur(10px);
+          /* removed backdrop-filter to avoid blurred layer on hover */
         }
 
         .select-btn {
           background: linear-gradient(135deg, 
-            rgba(0, 240, 255, 0.3), 
-            rgba(0, 240, 255, 0.1));
-          border: 1px solid rgba(0, 240, 255, 0.5);
+            rgba(0, 240, 255, 0.18), 
+            rgba(0, 240, 255, 0.08));
+          border: 1px solid rgba(0, 240, 255, 0.25);
           color: var(--color-primary, #00F0FF);
-          box-shadow: 0 0 20px rgba(0, 240, 255, 0.4);
+          box-shadow: none;
         }
 
         .select-btn:hover {
-          transform: translateY(-3px);
-          box-shadow: 0 0 30px rgba(0, 240, 255, 0.8);
-          background: linear-gradient(135deg, 
-            rgba(0, 240, 255, 0.5), 
-            rgba(0, 240, 255, 0.2));
+          background: linear-gradient(135deg, rgba(0,240,255,0.22), rgba(0,240,255,0.12));
         }
 
         .select-btn.selected {
@@ -307,7 +284,7 @@ const AgentCard = ({ agent, selected = false, onClick }: AgentCardProps) => {
             rgba(32, 227, 178, 0.15));
           border-color: rgba(32, 227, 178, 0.6);
           color: #20E3B2;
-          box-shadow: 0 0 30px rgba(32, 227, 178, 0.6);
+          box-shadow: none;
         }
 
         /* Responsive Design */
@@ -323,7 +300,7 @@ const AgentCard = ({ agent, selected = false, onClick }: AgentCardProps) => {
           }
 
           .agent-card h3 {
-            font-size: 1.25rem;
+            font-size: 1.125rem;
           }
 
           .skill-badge {
