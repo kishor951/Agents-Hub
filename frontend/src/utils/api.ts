@@ -304,3 +304,83 @@ export async function deleteChatSession(
   }
 }
 
+// Breeding API Types
+export interface BreedAgentsRequest {
+  parent_a_asset_id: string;
+  parent_b_asset_id: string;
+  child_name: string;
+  trait_balance: number;  // 0-100, kept in schema but NOT used in LLM calls
+  custom_instructions?: string;
+  predicted_skills: string[];
+}
+
+export interface BreedAgentsResponse {
+  ipfs_hash: string;
+  child_text: string;  // Child personality (for backward compatibility)
+  masumi_did: string;
+  parent_a_personality: string;
+  parent_b_personality: string;
+  // Additional fields for complete child data
+  child_purpose: string;
+  child_instructions: string;
+  child_skills: string[];
+  child_llm_model: string;
+}
+
+/**
+ * Breed two agents
+ * 
+ * @param parentA_assetId - Parent A's asset ID
+ * @param parentB_assetId - Parent B's asset ID
+ * @param childName - User-entered child name
+ * @param traitBalance - Trait balance (0-100, UI only, not used in LLM)
+ * @param customInstructions - Custom breeding instructions (optional)
+ * @param predictedSkills - Predicted child skills from compatibility calculation
+ * @returns BreedAgentsResponse with complete child data
+ */
+export async function breedAgents(
+  parentA_assetId: string,
+  parentB_assetId: string,
+  childName: string,
+  traitBalance: number = 50,
+  customInstructions?: string,
+  predictedSkills: string[] = []
+): Promise<BreedAgentsResponse> {
+  try {
+    console.log(`🔍 [API] Breeding agents: ${parentA_assetId.substring(0, 10)}... and ${parentB_assetId.substring(0, 10)}...`);
+    console.log(`   Child name: ${childName}`);
+    console.log(`   Trait balance: ${traitBalance}% A / ${100 - traitBalance}% B (UI only, not used in LLM)`);
+    console.log(`   Predicted skills: ${predictedSkills.length} skills`);
+    
+    const response = await fetch(`${API_URL}/api/breed`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        parent_a_asset_id: parentA_assetId,
+        parent_b_asset_id: parentB_assetId,
+        child_name: childName,
+        trait_balance: traitBalance,
+        custom_instructions: customInstructions || null,
+        predicted_skills: predictedSkills
+      }),
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({ detail: response.statusText }));
+      console.error(`❌ [API] Failed to breed agents: ${errorData.detail || response.statusText}`);
+      throw new Error(errorData.detail || `HTTP error! status: ${response.status}`);
+    }
+
+    const data = await response.json();
+    console.log(`✅ [API] Breeding successful: ${data.ipfs_hash.substring(0, 10)}...`);
+    return data;
+  } catch (error: any) {
+    if (error.message.includes("fetch")) {
+      throw new Error("Failed to connect to backend API. Make sure the server is running on " + API_URL);
+    }
+    throw error;
+  }
+}
+

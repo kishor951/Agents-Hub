@@ -1,22 +1,22 @@
 import { useState, useEffect } from 'react'
 import { Agent, FusionResult } from '../types'
-import axios from 'axios'
-import { meshCardanoService } from '../services/meshService'
-import AgentCard from './AgentCard'
+import { useWallet } from '@meshsdk/react'
+import { breedAgents } from '../utils/api'
+import { mintBredAgent } from '../utils/mintAgent'
+import { createBredAgentMetadata } from '../utils/agentMetadata'
 
 interface BreedScreenProps {
   parentA: Agent
   parentB: Agent
-  walletAddress: string
   onFusionComplete: (child: Agent) => void
   onBack: () => void
 }
 
-const BreedScreen = ({ parentA, parentB, walletAddress, onFusionComplete, onBack }: BreedScreenProps) => {
+const BreedScreen = ({ parentA, parentB, onFusionComplete, onBack }: BreedScreenProps) => {
+  const { wallet, connected } = useWallet()
   const [loading, setLoading] = useState(false)
-  const [step, setStep] = useState<'preview' | 'compatibility' | 'fusing' | 'minting' | 'signing' | 'submitting' | 'confirming'>('preview')
+  const [step, setStep] = useState<'compatibility' | 'breeding' | 'minting' | 'signing' | 'confirming'>('compatibility')
   const [fusionResult, setFusionResult] = useState<FusionResult | null>(null)
-  const [unsignedTx, setUnsignedTx] = useState<string | null>(null)
   const [txHash, setTxHash] = useState<string | null>(null)
   const [currentSentence, setCurrentSentence] = useState(0)
   const [isAnimating, setIsAnimating] = useState(false)
@@ -46,81 +46,73 @@ const BreedScreen = ({ parentA, parentB, walletAddress, onFusionComplete, onBack
   ]
 
   const handleSignAndSubmit = async () => {
-    if (!unsignedTx) return
+    if (!fusionResult || !connected || !wallet) {
+      alert('Missing breeding result or wallet not connected')
+      return
+    }
 
     setStep('signing')
+
     try {
-      // Check for wallet
-      if (!window.cardano) {
-        throw new Error('No Cardano wallet detected')
+      // Get parent generations
+      const parentA_gen = parentA.generation || 0
+      const parentB_gen = parentB.generation || 0
+      const childGeneration = Math.max(parentA_gen, parentB_gen) + 1
+
+      // Create metadata for bred agent with all child data
+      const metadata = createBredAgentMetadata(
+        fusionResult.metadata.name,
+        fusionResult.ipfsCid,  // IPFS hash of child genetic data
+        fusionResult.metadata.masumiDid,
+        parentA.id,  // parent_a_asset_id
+        parentB.id,  // parent_b_asset_id
+        parentA_gen,
+        parentB_gen
+      )
+
+      // Add image to metadata if available
+      if (fusionResult.imageIpfsCid) {
+        metadata.image = `ipfs://${fusionResult.imageIpfsCid}`
       }
 
-      // Try Lace first, then fallback to Nami/Eternl
-      let walletApi = window.cardano.lace || window.cardano.nami || window.cardano.eternl
-      if (!walletApi) {
-        throw new Error('No supported wallet found (Lace, Nami, or Eternl required)')
-      }
+      // Mint using mintBredAgent (same as Reference)
+      const newTxHash = await mintBredAgent(
+        wallet,
+        metadata,
+        parentA.id,
+        parentB.id
+      )
 
-      console.log('🔐 Requesting wallet signature...')
-      
-      // Enable wallet and get API
-      const enabledApi = await walletApi.enable()
-      
-      // Request wallet to sign the transaction
-      const signedTx = await enabledApi.signTx(unsignedTx, true)
-      console.log('✅ Transaction signed by wallet')
-
-      setStep('submitting')
-      
-      // Submit signed transaction to backend
-      const submitResponse = await axios.post('http://localhost:5000/api/submit-breeding-tx', {
-        signedTx,
-        geneticHash: fusionResult?.geneticHash
-      })
-
-      const { txHash: newTxHash } = submitResponse.data
       setTxHash(newTxHash)
-      console.log(`📦 Transaction submitted: ${newTxHash}`)
-
       setStep('confirming')
-      
-      // Poll for confirmation
-      let confirmed = false
-      let attempts = 0
-      while (!confirmed && attempts < 60) {
-        await new Promise(resolve => setTimeout(resolve, 2000))
-        
-        try {
-          const statusResponse = await axios.get(`http://localhost:5000/api/tx-status/${newTxHash}`)
-          if (statusResponse.data.confirmed) {
-            confirmed = true
-            console.log('✅ Transaction confirmed on-chain!')
-            alert(`✅ NFT Minted!\n\nTX Hash: ${newTxHash}\n\nView on explorer: https://preprod.cardanoscan.io/transaction/${newTxHash}`)
-          }
-        } catch (err) {
-          console.log(`⏳ Waiting for confirmation... (${attempts + 1}/60)`)
-        }
-        
-        attempts++
+
+      // Create child agent object with complete data
+      const childAgent: Agent = {
+        id: `child_${Date.now()}`,  // Will be updated after blockchain confirmation
+        tokenId: `child_${fusionResult.geneticHash}`,
+        name: fusionResult.metadata.name,
+        purpose: fusionResult.metadata.purpose,  // From breeding result
+        instructions: fusionResult.metadata.instructions,  // From breeding result
+        personality: fusionResult.metadata.personality,  // From breeding result
+        skills: fusionResult.metadata.skills || [],  // From breeding result (predicted skills)
+        llmModel: fusionResult.metadata.llmModel || '',  // From breeding result (parent A's model)
+        generation: childGeneration,
+        xp: 0,
+        breedCount: 0,
+        ownerAddress: '',  // Will be set from wallet
+        geneticHash: fusionResult.geneticHash,
+        ipfsCid: fusionResult.ipfsCid,
+        imageUrl: fusionResult.imageIpfsCid ? `ipfs://${fusionResult.imageIpfsCid}` : undefined,
+        masumiDid: fusionResult.metadata.masumiDid,
+        parents: [parentA.id, parentB.id] as [string, string],
+        minted: true,
+        txHash: newTxHash
       }
 
-      if (confirmed) {
-        const childAgent: Agent = {
-          id: `child_${Date.now()}`,
-          tokenId: `child_${fusionResult!.geneticHash.substring(0, 8)}`,
-          ...fusionResult!.metadata,
-          ipfsCid: fusionResult!.ipfsCid,
-          geneticHash: fusionResult!.geneticHash,
-          ownerAddress: walletAddress,
-          imageUrl: '👶',
-          minted: true,
-          txHash: newTxHash
-        }
-        onFusionComplete(childAgent)
-      }
+      onFusionComplete(childAgent)
     } catch (error: any) {
       console.error('Signing/submission error:', error)
-      if (error.message?.includes('User cancelled')) {
+      if (error.message?.includes('User cancelled') || error.message?.includes('cancelled')) {
         alert('Transaction signing cancelled')
       } else {
         alert(`Error: ${error.message || 'Failed to sign/submit transaction'}`)
@@ -176,6 +168,12 @@ const BreedScreen = ({ parentA, parentB, walletAddress, onFusionComplete, onBack
     }
   }
 
+  // Auto-load compatibility analysis when component mounts
+  useEffect(() => {
+    handleFuse()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (file) {
@@ -190,64 +188,88 @@ const BreedScreen = ({ parentA, parentB, walletAddress, onFusionComplete, onBack
   }
 
   const handleProceedToFusion = async () => {
+    if (!connected || !wallet) {
+      alert('Please connect your wallet first')
+      return
+    }
+
+    if (!childAgentName.trim()) {
+      alert('Please enter a name for the child agent')
+      return
+    }
+
     setLoading(true)
-    setStep('fusing')
+    setStep('breeding')  // Rename from 'fusing'
 
     try {
-      // Call backend fusion API
-      const response = await axios.post<FusionResult>('http://localhost:5000/api/fuse', {
-        parentA_token: parentA.tokenId,
-        parentB_token: parentB.tokenId,
-        seed: Date.now().toString(),
-        ownerAddress: walletAddress
+      // Step 1: Get predicted skills from compatibility calculation (if available)
+      // For now, combine parent skills as fallback (current implementation)
+      const predictedSkills = [...new Set([...parentA.skills.slice(0, 3), ...parentB.skills.slice(0, 3)])]
+      // TODO: When compatibility calculation is implemented, use: compatibilityScore?.predicted_skills || predictedSkills
+      
+      // Step 2: Get custom instructions from textarea (if provided)
+      const breedInstructionsTextarea = document.getElementById('breedInstructions') as HTMLTextAreaElement
+      const customInstructions = breedInstructionsTextarea?.value?.trim() || ''
+
+      // Step 3: Call new Python backend /api/breed endpoint (image upload happens AFTER breeding)
+      const breedingResult = await breedAgents(
+        parentA.id,  // parent_a_asset_id
+        parentB.id,  // parent_b_asset_id
+        childAgentName.trim(),  // child_name
+        traitBalance,  // trait_balance (0-100, kept in schema but NOT used in LLM calls)
+        customInstructions || undefined,  // custom_instructions (from textarea)
+        predictedSkills  // predicted_skills
+      )
+
+      // Step 4: Upload child image to IPFS AFTER breeding (if provided)
+      let childImageIpfsCid: string | undefined = undefined
+      if (imagePreview) {
+        try {
+          const response = await fetch(imagePreview)
+          const blob = await response.blob()
+          const file = new File([blob], 'child_agent_image.jpg', { type: 'image/jpeg' })
+          
+          const formData = new FormData()
+          formData.append('picture', file)
+          
+          const uploadResponse = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:8000'}/api/agents/upload-image`, {
+            method: 'POST',
+            body: formData
+          })
+          
+          if (uploadResponse.ok) {
+            const uploadData = await uploadResponse.json()
+            childImageIpfsCid = uploadData.image_ipfs_cid
+            console.log(`✅ [Image] Uploaded child image: ${childImageIpfsCid}`)
+          } else {
+            console.warn('⚠️ [Image] Failed to upload child image, continuing without image')
+          }
+        } catch (error) {
+          console.warn('⚠️ [Image] Failed to upload child image:', error)
+          // Continue without image - not critical
+        }
+      }
+
+      // Store breeding result with all child data
+      setFusionResult({
+        ipfsCid: breedingResult.ipfs_hash,
+        geneticHash: breedingResult.ipfs_hash.substring(0, 16),
+        imageIpfsCid: childImageIpfsCid,  // Store image CID (uploaded after breeding)
+        metadata: {
+          name: childAgentName,  // Use child_name from user input
+          purpose: breedingResult.child_purpose,
+          instructions: breedingResult.child_instructions,
+          personality: breedingResult.child_text,
+          skills: breedingResult.child_skills,
+          llmModel: breedingResult.child_llm_model,
+          masumiDid: breedingResult.masumi_did
+        }
       })
 
-      setFusionResult(response.data)
       setStep('minting')
-
-      // Step 2: Query parent NFT UTXOs for breeding
-      try {
-        const parentUTXOs = await meshCardanoService.getWalletUTXOs(walletAddress)
-        console.log(`📦 Found ${parentUTXOs.length} UTXOs for breeding`)
-      } catch (err) {
-        console.warn('⚠️ Could not query UTXOs:', err)
-      }
-
-      // Step 3: Build breeding transaction with Mesh SDK
-      try {
-        const breedingTx = await meshCardanoService.buildBreedingTransaction({
-          parentA: {
-            input: { txHash: (parentA.geneticHash || 'mock_hash_a').substring(0, 64), outputIndex: 0 },
-            output: { address: walletAddress, amount: [] }
-          },
-          parentB: {
-            input: { txHash: (parentB.geneticHash || 'mock_hash_b').substring(0, 64), outputIndex: 0 },
-            output: { address: walletAddress, amount: [] }
-          },
-          breedingFeeUTXO: {
-            input: { txHash: (response.data.geneticHash || 'mock_hash_fee').substring(0, 64), outputIndex: 0 },
-            output: { address: walletAddress, amount: [] }
-          },
-          walletAddress,
-          ownerAddress: walletAddress,
-          platformAddress: import.meta.env.VITE_PLATFORM_ADDRESS || walletAddress,
-          geneticHash: response.data.geneticHash,
-          scriptAddress: import.meta.env.VITE_SCRIPT_ADDRESS || '',
-          policyId: import.meta.env.VITE_POLICY_ID || ''
-        })
-        
-        if (breedingTx.success) {
-          console.log('✅ Breeding transaction built successfully')
-          setUnsignedTx(breedingTx.unsignedTx)
-        } else {
-          console.error('❌ Transaction build failed:', breedingTx.error)
-        }
-      } catch (err) {
-        console.warn('⚠️ Could not build transaction:', err)
-      }
-    } catch (error) {
-      console.error('Fusion error:', error)
-      alert('Fusion failed. Please try again.')
+    } catch (error: any) {
+      console.error('Breeding error:', error)
+      alert(`Breeding failed: ${error.message || 'Please try again'}`)
       setStep('compatibility')
     } finally {
       setLoading(false)
@@ -265,44 +287,6 @@ const BreedScreen = ({ parentA, parentB, walletAddress, onFusionComplete, onBack
           {sentences[currentSentence].text.split(sentences[currentSentence].highlight)[1]}
         </div>
       </div>
-
-      <h2>Agent Fusion</h2>
-
-      <div className="parents-display">
-        <div className="parent">
-          <h3>Parent A</h3>
-          <AgentCard agent={parentA} />
-        </div>
-
-        <div className="fusion-arrow">
-          {step === 'preview' && 'DNA'}
-          {step === 'fusing' && '⚡'}
-          {step === 'minting' && 'Mint'}
-        </div>
-
-        <div className="parent">
-          <h3>Parent B</h3>
-          <AgentCard agent={parentB} />
-        </div>
-      </div>
-
-      {step === 'preview' && (
-        <div className="preview-section">
-          <h3>Predicted Child Traits</h3>
-          <div className="predicted-skills">
-            {predictedSkills.map((skill, idx) => (
-              <span key={idx} className="skill-badge">{skill}</span>
-            ))}
-          </div>
-          <p className="fusion-info">
-            Generation: {Math.max(parentA.generation, parentB.generation) + 1}<br />
-
-          </p>
-          <button className="fuse-action-button" onClick={handleFuse} disabled={loading}>
-            Get a Date
-          </button>
-        </div>
-      )}
 
       {step === 'compatibility' && (
         <div className="status-section compatibility-section">
@@ -489,7 +473,7 @@ const BreedScreen = ({ parentA, parentB, walletAddress, onFusionComplete, onBack
         </div>
       )}
 
-      {step === 'fusing' && (
+      {step === 'breeding' && (
         <div className="status-section">
           <div className="spinner">🧬</div>
           <h3>Breeding in Progress...</h3>
@@ -608,74 +592,6 @@ const BreedScreen = ({ parentA, parentB, walletAddress, onFusionComplete, onBack
           to {
             text-shadow: 0 0 20px rgba(139, 92, 246, 0.8), 0 0 30px rgba(139, 92, 246, 0.6);
           }
-        }
-
-        .parents-display {
-          display: grid;
-          grid-template-columns: 1fr auto 1fr;
-          gap: 2rem;
-          align-items: center;
-          margin: 2rem 0;
-        }
-
-        .parent h3 {
-          text-align: center;
-          margin-bottom: 1rem;
-          color: #888;
-        }
-
-        .fusion-arrow {
-          font-size: 4rem;
-          animation: pulse 2s infinite;
-        }
-
-        @keyframes pulse {
-          0%, 100% { transform: scale(1); }
-          50% { transform: scale(1.2); }
-        }
-
-        .preview-section {
-          text-align: center;
-          margin-top: 3rem;
-        }
-
-        .predicted-skills {
-          display: flex;
-          flex-wrap: wrap;
-          gap: 0.5rem;
-          justify-content: center;
-          margin: 1.5rem 0;
-        }
-
-        .skill-badge {
-          background: #646cff;
-          color: white;
-          padding: 0.5rem 1rem;
-          border-radius: 6px;
-          font-size: 0.9rem;
-        }
-
-        .fusion-info {
-          color: #888;
-          margin: 1.5rem 0;
-          line-height: 1.8;
-        }
-
-        .fuse-action-button {
-          background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-          border: none;
-          color: white;
-          padding: 1rem 3rem;
-          font-size: 1.2rem;
-          font-weight: bold;
-          border-radius: 12px;
-          cursor: pointer;
-          margin-top: 1rem;
-        }
-
-        .fuse-action-button:disabled {
-          opacity: 0.5;
-          cursor: not-allowed;
         }
 
         .sign-button {

@@ -112,7 +112,6 @@ function AppContent() {
                 walletAddress ? (
                   !selectedParents[0] ? (
                     <BreedSelection 
-                      walletAddress={walletAddress}
                       onStartBreeding={handleStartBreeding}
                     />
                   ) : (
@@ -120,7 +119,6 @@ function AppContent() {
                       <BreedScreen 
                         parentA={selectedParents[0]}
                         parentB={selectedParents[1]}
-                        walletAddress={walletAddress}
                         onFusionComplete={handleFusionComplete}
                         onBack={handleBackToDashboard}
                       />

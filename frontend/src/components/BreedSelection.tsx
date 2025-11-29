@@ -1,24 +1,112 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
+import { useWallet } from '@meshsdk/react'
 import { Agent } from '../types'
-import axios from 'axios'
+import { getUserAgents } from '../utils/walletAgents'
+import { fetchAgent } from '../utils/api'
 
 interface BreedSelectionProps {
-  walletAddress: string
   onStartBreeding: (parentA: Agent, parentB: Agent) => void
 }
 
-const BreedSelection = ({ walletAddress, onStartBreeding }: BreedSelectionProps) => {
+const BreedSelection = ({ onStartBreeding }: BreedSelectionProps) => {
+  const { wallet, connected } = useWallet()
   const [agents, setAgents] = useState<Agent[]>([])
   const [selectedParents, setSelectedParents] = useState<[Agent | null, Agent | null]>([null, null])
   const [searchQuery, setSearchQuery] = useState('')
   const [filteredAgents, setFilteredAgents] = useState<Agent[] | null>(null)
   const [currentSentence, setCurrentSentence] = useState(0)
   const [isAnimating, setIsAnimating] = useState(false)
+  const [loading, setLoading] = useState(false)
 
   // Load user's agents
+  const loadUserAgents = useCallback(async () => {
+    if (!connected || !wallet) {
+      console.log('⏳ [BreedSelection] Waiting for wallet connection...')
+      setLoading(false)
+      setAgents([])
+      return
+    }
+
+    try {
+      setLoading(true)
+      console.log('🔍 [BreedSelection] Discovering agents from wallet...')
+      
+      // Step 1: Discover agents from wallet UTXOs
+      const walletAgents = await getUserAgents(wallet)
+      console.log(`✅ [BreedSelection] Found ${walletAgents.length} agent assets in wallet`)
+      
+      if (walletAgents.length === 0) {
+        setAgents([])
+        setLoading(false)
+        return
+      }
+      
+      // Step 2: Fetch full metadata for each agent
+      console.log(`📡 [BreedSelection] Fetching metadata for ${walletAgents.length} agents...`)
+      
+      const agentPromises = walletAgents.map(async (walletAgent) => {
+        try {
+          const agentData = await fetchAgent(walletAgent.assetId)
+          
+          // Map snake_case response to Agent interface (camelCase)
+          const agent: Agent = {
+            id: agentData.asset_id,
+            tokenId: agentData.asset_id,
+            name: agentData.name || walletAgent.assetName || 'Unnamed Agent',
+            purpose: agentData.purpose,
+            instructions: agentData.instructions,
+            personality: agentData.personality,
+            skills: agentData.skills || [],
+            llmModel: agentData.llm_model,
+            generation: agentData.generation || 0,
+            xp: agentData.xp || 0,
+            breedCount: agentData.breed_count || 0,
+            owner: '',
+            ownerAddress: '',
+            geneticHash: agentData.genetic_hash || agentData.brain_cid?.replace('genetic://', '').replace('ipfs://', ''),
+            ipfsCid: agentData.brain_cid?.replace('ipfs://', '').replace('genetic://', ''),
+            masumiDid: agentData.masumi_did,
+            minted: true,
+            txHash: agentData.mint_tx_hash,
+            parents: agentData.parents as [string, string] | undefined,
+            createdAt: agentData.mint_tx_hash ? 'On-chain' : undefined,
+            imageUrl: agentData.image_ipfs_cid 
+              ? `ipfs://${agentData.image_ipfs_cid}` 
+              : undefined
+          }
+          
+          return agent
+        } catch (error: any) {
+          console.error(`❌ [BreedSelection] Failed to fetch agent ${walletAgent.assetId}:`, error)
+          // Return minimal agent object for failed fetches
+          return {
+            id: walletAgent.assetId,
+            tokenId: walletAgent.assetId,
+            name: walletAgent.assetName || 'Unknown Agent',
+            generation: 0,
+            xp: 0,
+            skills: [],
+            minted: true
+          } as Agent
+        }
+      })
+      
+      const fetchedAgents = await Promise.all(agentPromises)
+      const validAgents = fetchedAgents.filter(a => a !== null) as Agent[]
+      
+      console.log(`✅ [BreedSelection] Loaded ${validAgents.length} agents for breeding`)
+      setAgents(validAgents)
+    } catch (error: any) {
+      console.error('❌ [BreedSelection] Failed to load agents:', error)
+      setAgents([])
+    } finally {
+      setLoading(false)
+    }
+  }, [wallet, connected])
+
   useEffect(() => {
     loadUserAgents()
-  }, [walletAddress])
+  }, [loadUserAgents])
 
   // Update filtered agents when agents or search query changes
   useEffect(() => {
@@ -43,16 +131,6 @@ const BreedSelection = ({ walletAddress, onStartBreeding }: BreedSelectionProps)
     setFilteredAgents(results)
   }, [searchQuery, agents])
 
-  const loadUserAgents = async () => {
-    try {
-      const response = await axios.get(`http://localhost:5000/api/agents?owner=${walletAddress}`)
-      setAgents(response.data.agents || [])
-      console.log(`✅ Loaded ${response.data.agents?.length || 0} agents for breeding`)
-    } catch (error) {
-      console.error('Failed to load agents:', error)
-      setAgents([])
-    }
-  }
 
   const handleSelectParent = (agent: Agent) => {
     setSelectedParents(prev => {
@@ -142,7 +220,12 @@ const BreedSelection = ({ walletAddress, onStartBreeding }: BreedSelectionProps)
             )}
           </div>
         )}
-        {agents.length === 0 ? (
+        {loading ? (
+          <div className="empty-agents">
+            <p>Loading your agents...</p>
+            <p>Discovering agents from your wallet...</p>
+          </div>
+        ) : agents.length === 0 ? (
           <div className="empty-agents">
             <p>You haven't created any agents yet.</p>
             <p>Create your first agent in the DIY Agent section!</p>
@@ -158,7 +241,13 @@ const BreedSelection = ({ walletAddress, onStartBreeding }: BreedSelectionProps)
               {(filteredAgents || agents).map(agent => (
                 <div key={agent.id} className="agent-card">
                   <div className="agent-header">
-                    <img src={agent.imageUrl || '/default-agent.png'} alt={agent.name} />
+                    <div className="agent-image-wrapper">
+                      {agent.imageUrl && agent.imageUrl.startsWith('http') ? (
+                        <img src={agent.imageUrl} alt={agent.name} />
+                      ) : (
+                        <div className="agent-emoji">{agent.imageUrl || agent.name.charAt(0)}</div>
+                      )}
+                    </div>
                     <h3>{agent.name}</h3>
                   </div>
                   <p>{agent.purpose}</p>
@@ -174,35 +263,28 @@ const BreedSelection = ({ walletAddress, onStartBreeding }: BreedSelectionProps)
               ))}
             </div>
 
-            {/* Breeding Section */}
-            <div className="breeding-section">
-              <h3>Selected Parents</h3>
-              <div className="selected-parents">
-                <div className="parent-slot">
-                  <span>Parent A:</span>
-                  {selectedParents[0] ? (
+            {/* Breeding Section - Only show when both parents are selected */}
+            {selectedParents[0] && selectedParents[1] && (
+              <div className="breeding-section">
+                <h3>Selected Parents</h3>
+                <div className="selected-parents">
+                  <div className="parent-slot">
+                    <span>Parent A:</span>
                     <span className="selected-name">{selectedParents[0].name}</span>
-                  ) : (
-                    <span className="empty">Not selected</span>
-                  )}
-                </div>
-                <div className="parent-slot">
-                  <span>Parent B:</span>
-                  {selectedParents[1] ? (
+                  </div>
+                  <div className="parent-slot">
+                    <span>Parent B:</span>
                     <span className="selected-name">{selectedParents[1].name}</span>
-                  ) : (
-                    <span className="empty">Not selected</span>
-                  )}
+                  </div>
                 </div>
+                <button
+                  className="breed-btn"
+                  onClick={handleBreedSelected}
+                >
+                  Get a Date
+                </button>
               </div>
-              <button
-                className="breed-btn"
-                disabled={!selectedParents[0] || !selectedParents[1]}
-                onClick={handleBreedSelected}
-              >
-                Get a Date
-              </button>
-            </div>
+            )}
           </>
         )}
       </div>
@@ -412,10 +494,10 @@ const BreedSelection = ({ walletAddress, onStartBreeding }: BreedSelectionProps)
         .empty-agents {
           text-align: center;
           padding: 4rem 2rem;
-          background: rgba(255, 255, 255, 0.05);
+          background: linear-gradient(135deg, rgba(139, 92, 246, 0.05) 0%, rgba(99, 102, 241, 0.05) 100%);
           backdrop-filter: blur(10px);
           -webkit-backdrop-filter: blur(10px);
-          border: 2px dashed rgba(0, 240, 255, 0.3);
+          border: 2px dashed rgba(139, 92, 246, 0.3);
           border-radius: 16px;
           color: var(--color-text-secondary, #8F90A6);
         }
@@ -433,19 +515,21 @@ const BreedSelection = ({ walletAddress, onStartBreeding }: BreedSelectionProps)
         }
 
         .agent-card {
-          background: rgba(255, 255, 255, 0.05);
+          background: linear-gradient(135deg, rgba(139, 92, 246, 0.05) 0%, rgba(99, 102, 241, 0.05) 100%);
           backdrop-filter: blur(10px);
           -webkit-backdrop-filter: blur(10px);
-          border: 1px solid rgba(255, 255, 255, 0.1);
+          border: 1px solid rgba(139, 92, 246, 0.2);
           border-radius: 16px;
           padding: 1.5rem;
           transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+          box-shadow: 0 4px 15px rgba(139, 92, 246, 0.1);
         }
 
         .agent-card:hover {
           transform: translateY(-4px);
-          border-color: rgba(0, 240, 255, 0.3);
-          box-shadow: 0 0 20px rgba(0, 240, 255, 0.2);
+          border-color: rgba(139, 92, 246, 0.4);
+          box-shadow: 0 0 30px rgba(139, 92, 246, 0.3);
+          background: linear-gradient(135deg, rgba(139, 92, 246, 0.1) 0%, rgba(99, 102, 241, 0.1) 100%);
         }
 
         .agent-header {
@@ -455,12 +539,35 @@ const BreedSelection = ({ walletAddress, onStartBreeding }: BreedSelectionProps)
           margin-bottom: 1rem;
         }
 
-        .agent-header img {
-          width: 80px;
-          height: 80px;
+        .agent-image-wrapper {
+          width: 120px;
+          height: 120px;
           border-radius: 50%;
           margin-bottom: 1rem;
-          border: 2px solid rgba(0, 240, 255, 0.3);
+          border: 2px solid rgba(139, 92, 246, 0.3);
+          background: linear-gradient(135deg, rgba(139, 92, 246, 0.2) 0%, rgba(99, 102, 241, 0.2) 100%);
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          box-shadow: 0 0 20px rgba(139, 92, 246, 0.2);
+          overflow: hidden;
+        }
+
+        .agent-image-wrapper img {
+          width: 100%;
+          height: 100%;
+          object-fit: cover;
+          border-radius: 50%;
+        }
+
+        .agent-emoji {
+          width: 100%;
+          height: 100%;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          font-size: 3rem;
+          border-radius: 50%;
         }
 
         .agent-header h3 {
@@ -490,7 +597,7 @@ const BreedSelection = ({ walletAddress, onStartBreeding }: BreedSelectionProps)
           background: rgba(255, 255, 255, 0.05);
           backdrop-filter: blur(10px);
           -webkit-backdrop-filter: blur(10px);
-          border: 1px solid rgba(255, 255, 255, 0.1);
+          border: 1px solid rgba(139, 92, 246, 0.2);
           border-radius: 100px;
           color: var(--color-text-secondary, #8F90A6);
           font-family: var(--font-mono, 'Space Mono', monospace);
@@ -503,28 +610,30 @@ const BreedSelection = ({ walletAddress, onStartBreeding }: BreedSelectionProps)
         }
 
         .select-btn:hover {
-          background: rgba(255, 255, 255, 0.08);
-          border-color: rgba(0, 240, 255, 0.4);
-          color: var(--color-primary, #00F0FF);
+          background: rgba(139, 92, 246, 0.1);
+          border-color: rgba(139, 92, 246, 0.4);
+          color: #8b5cf6;
           transform: translateY(-2px);
+          box-shadow: 0 4px 15px rgba(139, 92, 246, 0.2);
         }
 
         .select-btn.selected {
-          background: linear-gradient(135deg, rgba(0, 240, 255, 0.3), rgba(0, 240, 255, 0.1));
-          border-color: var(--color-primary, #00F0FF);
-          color: var(--color-primary, #00F0FF);
-          box-shadow: 0 0 20px rgba(0, 240, 255, 0.4);
+          background: linear-gradient(135deg, rgba(139, 92, 246, 0.3) 0%, rgba(99, 102, 241, 0.3) 100%);
+          border-color: #8b5cf6;
+          color: #FFFFFF;
+          box-shadow: 0 0 20px rgba(139, 92, 246, 0.5), 0 4px 15px rgba(139, 92, 246, 0.3);
         }
 
         /* Breeding Section */
         .breeding-section {
-          background: linear-gradient(135deg, rgba(0, 240, 255, 0.1), rgba(255, 255, 255, 0.05));
+          background: linear-gradient(135deg, rgba(139, 92, 246, 0.1) 0%, rgba(99, 102, 241, 0.1) 100%);
           backdrop-filter: blur(20px);
           -webkit-backdrop-filter: blur(20px);
-          border: 2px solid rgba(0, 240, 255, 0.3);
+          border: 2px solid rgba(139, 92, 246, 0.3);
           border-radius: 20px;
           padding: 2rem;
           text-align: center;
+          box-shadow: 0 0 30px rgba(139, 92, 246, 0.2);
         }
 
         .breeding-section h3 {
@@ -532,7 +641,10 @@ const BreedSelection = ({ walletAddress, onStartBreeding }: BreedSelectionProps)
           font-family: var(--font-headline, 'Orbitron', sans-serif);
           text-transform: uppercase;
           letter-spacing: 0.05em;
-          color: var(--color-primary, #00F0FF);
+          background: linear-gradient(135deg, #8b5cf6 0%, #6366f1 100%);
+          -webkit-background-clip: text;
+          -webkit-text-fill-color: transparent;
+          background-clip: text;
           margin-bottom: 1.5rem;
         }
 
@@ -561,7 +673,10 @@ const BreedSelection = ({ walletAddress, onStartBreeding }: BreedSelectionProps)
         .parent-slot .selected-name {
           font-size: 1.125rem;
           font-weight: 600;
-          color: var(--color-primary, #00F0FF);
+          background: linear-gradient(135deg, #8b5cf6 0%, #6366f1 100%);
+          -webkit-background-clip: text;
+          -webkit-text-fill-color: transparent;
+          background-clip: text;
           font-family: var(--font-headline, 'Orbitron', sans-serif);
         }
 
@@ -573,10 +688,8 @@ const BreedSelection = ({ walletAddress, onStartBreeding }: BreedSelectionProps)
 
         .breed-btn {
           padding: 1rem 3rem;
-          background: linear-gradient(135deg, rgba(0, 240, 255, 0.3), rgba(255, 255, 255, 0.15));
-          backdrop-filter: blur(10px);
-          -webkit-backdrop-filter: blur(10px);
-          border: 1px solid rgba(0, 240, 255, 0.5);
+          background: linear-gradient(135deg, #8b5cf6 0%, #6366f1 100%);
+          border: none;
           border-radius: 100px;
           color: var(--color-text-primary, #FFFFFF);
           font-family: var(--font-mono, 'Space Mono', monospace);
@@ -586,13 +699,13 @@ const BreedSelection = ({ walletAddress, onStartBreeding }: BreedSelectionProps)
           letter-spacing: 0.1em;
           cursor: pointer;
           transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
-          box-shadow: 0 0 30px rgba(0, 240, 255, 0.5);
+          box-shadow: 0 4px 15px rgba(139, 92, 246, 0.4), 0 0 30px rgba(139, 92, 246, 0.3);
         }
 
         .breed-btn:hover:not(:disabled) {
           transform: translateY(-4px) scale(1.05);
-          box-shadow: 0 0 40px rgba(0, 240, 255, 0.8);
-          background: linear-gradient(135deg, rgba(0, 240, 255, 0.5), rgba(255, 255, 255, 0.25));
+          box-shadow: 0 6px 20px rgba(139, 92, 246, 0.5), 0 0 40px rgba(139, 92, 246, 0.4);
+          background: linear-gradient(135deg, #9d6aff 0%, #7475ff 100%);
         }
 
         .breed-btn:disabled {

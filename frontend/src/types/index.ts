@@ -23,7 +23,16 @@ export interface Agent {
 export interface FusionResult {
   ipfsCid: string
   geneticHash: string
-  metadata: Omit<Agent, 'id'>
+  imageIpfsCid?: string  // Optional IPFS CID for child agent image
+  metadata: {
+    name: string
+    purpose?: string
+    instructions?: string
+    personality?: string
+    skills?: string[]
+    llmModel?: string
+    masumiDid?: string
+  }
 }
 
 export interface MintTxResult {
