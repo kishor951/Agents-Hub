@@ -1,25 +1,23 @@
 import { useState, useRef, useEffect } from 'react'
+import { Link, useNavigate, useLocation } from 'react-router-dom'
 import WalletConnect from './WalletConnect'
-
-type Screen = 'dashboard' | 'create' | 'agent-detail' | 'breed' | 'child' | 'my-agents' | 'wallet-test'
 
 interface NavigationBarProps {
   walletAddress: string | null
   onConnect: (address: string) => void
   onDisconnect: () => void
-  currentScreen: string
-  onScreenChange: (screen: Screen) => void
 }
 
-const NavigationBar = ({ walletAddress, onConnect, onDisconnect, currentScreen, onScreenChange }: NavigationBarProps) => {
+const NavigationBar = ({ walletAddress, onConnect, onDisconnect }: NavigationBarProps) => {
   const [showDropdown, setShowDropdown] = useState(false)
-  const [showToast, setShowToast] = useState(false)
   const [toastMessage, setToastMessage] = useState('')
   const dropdownRef = useRef<HTMLDivElement>(null)
   const profileButtonRef = useRef<HTMLButtonElement>(null)
   const [dropdownPosition, setDropdownPosition] = useState({ top: 0, right: 0 })
   const [showCreateDropdown, setShowCreateDropdown] = useState(false)
   const createButtonRef = useRef<HTMLDivElement>(null)
+  const navigate = useNavigate()
+  const location = useLocation()
 
   // Close dropdown when clicking outside
   useEffect(() => {
@@ -46,8 +44,7 @@ const NavigationBar = ({ walletAddress, onConnect, onDisconnect, currentScreen, 
 
   const showToastNotification = (message: string) => {
     setToastMessage(message)
-    setShowToast(true)
-    setTimeout(() => setShowToast(false), 2000)
+    setTimeout(() => setToastMessage(''), 2000)
   }
 
   const formatAddress = (addr: string) => {
@@ -70,19 +67,19 @@ const NavigationBar = ({ walletAddress, onConnect, onDisconnect, currentScreen, 
       <div className="nav-container">
         {/* Left: Project Name */}
         <div className="nav-left">
-          <div className="project-name">
+          <Link to="/" className="project-name">
             <span className="project-icon">🧬</span>
             <span className="project-title">Agents Hub</span>
-          </div>
+          </Link>
         </div>
 
       {/* Right: Navigation Tabs + Wallet Profile */}
       <div className="nav-right">
         {walletAddress && (
           <div className="nav-tabs">
-            <button
-              className={`nav-tab ${currentScreen === 'dashboard' ? 'active' : ''}`}
-              onClick={() => onScreenChange('dashboard')}
+            <Link
+              to="/dashboard"
+              className={`nav-tab ${location.pathname === '/dashboard' ? 'active' : ''}`}
             >
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <circle cx="12" cy="12" r="10"/>
@@ -90,15 +87,16 @@ const NavigationBar = ({ walletAddress, onConnect, onDisconnect, currentScreen, 
                 <path d="M2 12h20"/>
               </svg>
               <span>Explore Agents</span>
-            </button>
+            </Link>
             <div 
               className="nav-tab-wrapper"
               ref={createButtonRef}
               onMouseEnter={() => setShowCreateDropdown(true)}
               onMouseLeave={() => setShowCreateDropdown(false)}
             >
-              <button
-                className={`nav-tab ${(currentScreen === 'create' || currentScreen === 'breed') ? 'active' : ''}`}
+              <Link
+                to="/create"
+                className={`nav-tab ${(location.pathname === '/create' || location.pathname === '/breed') ? 'active' : ''}`}
               >
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                   <path d="M12 5v14M5 12h14"/>
@@ -107,25 +105,23 @@ const NavigationBar = ({ walletAddress, onConnect, onDisconnect, currentScreen, 
                 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="dropdown-icon">
                   <polyline points="6 9 12 15 18 9"/>
                 </svg>
-              </button>
+              </Link>
               
               {/* Page Indicator - Shows below button when not hovering */}
-              {!showCreateDropdown && (currentScreen === 'create' || currentScreen === 'breed') && (
+              {!showCreateDropdown && (location.pathname === '/create' || location.pathname === '/breed') && (
                 <div className="page-indicator-inline">
                   <span className="indicator-label">
-                    {currentScreen === 'create' ? 'DIY Agent' : 'Breeding'}
+                    {location.pathname === '/create' ? 'DIY Agent' : 'Breeding'}
                   </span>
                 </div>
               )}
               
               {showCreateDropdown && (
                 <div className="create-dropdown">
-                  <button 
-                    className={`create-option ${currentScreen === 'create' ? 'active' : ''}`}
-                    onClick={() => {
-                      onScreenChange('create')
-                      setShowCreateDropdown(false)
-                    }}
+                  <Link 
+                    to="/create"
+                    className={`create-option ${location.pathname === '/create' ? 'active' : ''}`}
+                    onClick={() => setShowCreateDropdown(false)}
                   >
                     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                       <path d="M12 2v20M2 12h20"/>
@@ -135,13 +131,11 @@ const NavigationBar = ({ walletAddress, onConnect, onDisconnect, currentScreen, 
                       <span className="option-title">DIY Agent</span>
                       <span className="option-desc">Create from scratch</span>
                     </div>
-                  </button>
-                  <button 
-                    className={`create-option ${currentScreen === 'breed' ? 'active' : ''}`}
-                    onClick={() => {
-                      onScreenChange('breed')
-                      setShowCreateDropdown(false)
-                    }}
+                  </Link>
+                  <Link 
+                    to="/breed"
+                    className={`create-option ${location.pathname === '/breed' ? 'active' : ''}`}
+                    onClick={() => setShowCreateDropdown(false)}
                   >
                     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                       <path d="M20.2 7.8l-7.7 7.7-4-4-5.7 5.7"/>
@@ -152,7 +146,7 @@ const NavigationBar = ({ walletAddress, onConnect, onDisconnect, currentScreen, 
                       <span className="option-title">Breed Agents</span>
                       <span className="option-desc">Combine two agents</span>
                     </div>
-                  </button>
+                  </Link>
                 </div>
               )}
             </div>
@@ -217,10 +211,10 @@ const NavigationBar = ({ walletAddress, onConnect, onDisconnect, currentScreen, 
                     <span>View on Explorer</span>
                   </button>
                   <button
-                    className={`dropdown-action test-wallet ${currentScreen === 'wallet-test' ? 'active' : ''}`}
+                    className={`dropdown-action test-wallet ${location.pathname === '/wallet-test' ? 'active' : ''}`}
                     onClick={() => {
                       setShowDropdown(false)
-                      onScreenChange('wallet-test')
+                      navigate('/wallet-test')
                     }}
                   >
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -230,10 +224,10 @@ const NavigationBar = ({ walletAddress, onConnect, onDisconnect, currentScreen, 
                     <span>Test Wallet</span>
                   </button>
                   <button
-                    className={`dropdown-action my-agents ${currentScreen === 'my-agents' ? 'active' : ''}`}
+                    className={`dropdown-action my-agents ${location.pathname === '/my-agents' ? 'active' : ''}`}
                     onClick={() => {
                       setShowDropdown(false)
-                      onScreenChange('my-agents')
+                      navigate('/my-agents')
                     }}
                   >
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -271,7 +265,7 @@ const NavigationBar = ({ walletAddress, onConnect, onDisconnect, currentScreen, 
       </div>
 
       {/* Toast Notification */}
-      {showToast && (
+      {toastMessage && (
         <div className="toast-notification">
           ✅ {toastMessage}
         </div>
@@ -315,6 +309,7 @@ const NavigationBar = ({ walletAddress, onConnect, onDisconnect, currentScreen, 
           gap: 0.75rem;
           cursor: pointer;
           transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+          text-decoration: none;
         }
 
         .project-name:hover {
@@ -554,6 +549,7 @@ const NavigationBar = ({ walletAddress, onConnect, onDisconnect, currentScreen, 
           display: flex;
           align-items: center;
           gap: 0.5rem;
+          text-decoration: none;
         }
 
         .dropdown-icon {
@@ -624,6 +620,7 @@ const NavigationBar = ({ walletAddress, onConnect, onDisconnect, currentScreen, 
           transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
           margin-bottom: 0.5rem;
           text-align: left;
+          text-decoration: none;
         }
 
         .create-option:last-child {
@@ -853,6 +850,7 @@ const NavigationBar = ({ walletAddress, onConnect, onDisconnect, currentScreen, 
           letter-spacing: 0.03em;
           transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
           text-align: left;
+          text-decoration: none;
         }
 
         .dropdown-action svg {
@@ -894,6 +892,7 @@ const NavigationBar = ({ walletAddress, onConnect, onDisconnect, currentScreen, 
           text-transform: uppercase;
           letter-spacing: 0.05em;
           transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+          text-decoration: none;
         }
 
         .dropdown-disconnect svg {

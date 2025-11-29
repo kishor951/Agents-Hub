@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom'
 import './App.css'
 import NavigationBar from './components/NavigationBar'
 import Dashboard from './components/Dashboard'
@@ -9,16 +10,13 @@ import BreedScreen from './components/BreedScreen'
 import ChildAgentView from './components/ChildAgentView'
 import WalletTest from './components/WalletTest'
 import MyAgents from './components/MyAgents'
+import LandingPage from './components/LandingPage'
 import { Agent } from './types'
-
-type Screen = 'dashboard' | 'create' | 'agent-detail' | 'breed' | 'child' | 'my-agents' | 'wallet-test'
 
 function App() {
   const [walletAddress, setWalletAddress] = useState<string | null>(null)
-  const [currentScreen, setCurrentScreen] = useState<Screen>('dashboard')
   const [selectedParents, setSelectedParents] = useState<[Agent | null, Agent | null]>([null, null])
   const [childAgent, setChildAgent] = useState<Agent | null>(null)
-  const [selectedAgent, setSelectedAgent] = useState<Agent | null>(null)
 
   const handleWalletConnect = (address: string) => {
     setWalletAddress(address)
@@ -28,108 +26,139 @@ function App() {
     setWalletAddress(null)
   }
 
-  const handleViewAgent = (agent: Agent) => {
-    setSelectedAgent(agent)
-    setCurrentScreen('agent-detail')
-  }
-
-  const handleBackToMain = () => {
-    setSelectedAgent(null)
-    setCurrentScreen('dashboard')
-  }
-
   const handleStartBreeding = (parentA: Agent, parentB: Agent) => {
     setSelectedParents([parentA, parentB])
-    setCurrentScreen('breed')
   }
 
   const handleFusionComplete = (child: Agent) => {
     setChildAgent(child)
-    setCurrentScreen('child')
   }
 
   const handleBackToDashboard = () => {
-    setCurrentScreen('dashboard')
     setSelectedParents([null, null])
     setChildAgent(null)
   }
 
   return (
-    <div className="app">
-      <NavigationBar 
-        walletAddress={walletAddress} 
-        onConnect={handleWalletConnect}
-        onDisconnect={handleWalletDisconnect}
-        currentScreen={currentScreen}
-        onScreenChange={setCurrentScreen}
-      />
+    <Router>
+      <div className="app">
+        <NavigationBar 
+          walletAddress={walletAddress} 
+          onConnect={handleWalletConnect}
+          onDisconnect={handleWalletDisconnect}
+        />
 
+        <main className="app-main">
+          <Routes>
+            {/* Landing Page - Default route */}
+            <Route path="/" element={<LandingPage />} />
+            
+            {/* Dashboard - requires wallet */}
+            <Route 
+              path="/dashboard" 
+              element={
+                walletAddress ? (
+                  <Dashboard 
+                    walletAddress={walletAddress} 
+                    onStartBreeding={handleStartBreeding}
+                  />
+                ) : (
+                  <Navigate to="/" replace />
+                )
+              } 
+            />
+            
+            {/* Agent Detail */}
+            <Route 
+              path="/agent/:id" 
+              element={<AgentDetail />} 
+            />
+            
+            {/* Create Agent - requires wallet */}
+            <Route 
+              path="/create" 
+              element={
+                walletAddress ? (
+                  <CreateAgent 
+                    walletAddress={walletAddress}
+                    onAgentCreated={(agent) => console.log('Agent created:', agent)}
+                    onStartBreeding={handleStartBreeding}
+                  />
+                ) : (
+                  <Navigate to="/" replace />
+                )
+              } 
+            />
+            
+            {/* Breed Selection - requires wallet */}
+            <Route 
+              path="/breed" 
+              element={
+                walletAddress ? (
+                  !selectedParents[0] ? (
+                    <BreedSelection 
+                      walletAddress={walletAddress}
+                      onStartBreeding={handleStartBreeding}
+                    />
+                  ) : (
+                    selectedParents[0] && selectedParents[1] ? (
+                      <BreedScreen 
+                        parentA={selectedParents[0]}
+                        parentB={selectedParents[1]}
+                        walletAddress={walletAddress}
+                        onFusionComplete={handleFusionComplete}
+                        onBack={handleBackToDashboard}
+                      />
+                    ) : (
+                      <Navigate to="/breed" replace />
+                    )
+                  )
+                ) : (
+                  <Navigate to="/" replace />
+                )
+              } 
+            />
+            
+            {/* Child Agent View */}
+            <Route 
+              path="/child" 
+              element={
+                childAgent ? (
+                  <ChildAgentView 
+                    agent={childAgent}
+                    onBack={handleBackToDashboard}
+                  />
+                ) : (
+                  <Navigate to="/dashboard" replace />
+                )
+              } 
+            />
+            
+            {/* Wallet Test */}
+            <Route path="/wallet-test" element={<WalletTest />} />
+            
+            {/* My Agents - requires wallet */}
+            <Route 
+              path="/my-agents" 
+              element={
+                walletAddress ? (
+                  <MyAgents walletAddress={walletAddress} />
+                ) : (
+                  <Navigate to="/" replace />
+                )
+              } 
+            />
+            
+            {/* Catch all - redirect to landing */}
+            <Route path="*" element={<Navigate to="/" replace />} />
+          </Routes>
+        </main>
 
-      <main className="app-main">
-        {!walletAddress ? (
-          <div className="connect-prompt">
-            <h2>Connect Your Wallet</h2>
-            <p>Please connect a Cardano wallet to start fusing agents</p>
-          </div>
-        ) : (
-          <>
-            {currentScreen === 'dashboard' && (
-              <Dashboard 
-                walletAddress={walletAddress} 
-                onStartBreeding={handleStartBreeding}
-                onViewAgent={handleViewAgent}
-              />
-            )}
-            {currentScreen === 'agent-detail' && selectedAgent && (
-              <AgentDetail
-                agent={selectedAgent}
-                onBack={handleBackToMain}
-              />
-            )}
-            {currentScreen === 'create' && (
-              <CreateAgent 
-                walletAddress={walletAddress}
-                onAgentCreated={() => {
-                  setCurrentScreen('dashboard')
-                }}
-                onStartBreeding={handleStartBreeding}
-              />
-            )}
-            {currentScreen === 'breed' && !selectedParents[0] && (
-              <BreedSelection 
-                walletAddress={walletAddress}
-                onStartBreeding={handleStartBreeding}
-              />
-            )}
-            {currentScreen === 'breed' && selectedParents[0] && selectedParents[1] && (
-              <BreedScreen 
-                parentA={selectedParents[0]}
-                parentB={selectedParents[1]}
-                walletAddress={walletAddress}
-                onFusionComplete={handleFusionComplete}
-                onBack={handleBackToDashboard}
-              />
-            )}
-            {currentScreen === 'child' && childAgent && (
-              <ChildAgentView 
-                agent={childAgent}
-                onBack={handleBackToDashboard}
-              />
-            )}
-            {currentScreen === 'wallet-test' && (
-              <WalletTest />
-            )}
-            {currentScreen === 'my-agents' && (
-              <MyAgents walletAddress={walletAddress} />
-            )}
-          </>
-        )}
-      </main>
-
-      <footer className="app-footer">
-        <p>Hackathon MVP • Cardano Testnet • 95% Owner / 5% Platform Split</p>
-      </footer>
-    </div>
+        <footer className="app-footer">
+          <p>Hackathon MVP • Cardano Testnet • 95% Owner / 5% Platform Split</p>
+        </footer>
+      </div>
+    </Router>
   )
 }
 

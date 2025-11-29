@@ -1,11 +1,11 @@
 import { useState, useRef, useEffect } from 'react'
+import { useNavigate, useParams } from 'react-router-dom'
 import { Agent } from '../types'
 import AgentEditor from './AgentEditor'
 import axios from 'axios'
 
 interface AgentDetailProps {
-  agent: Agent
-  onBack: () => void
+  agent?: Agent
 }
 
 interface ChatMessage {
@@ -15,13 +15,17 @@ interface ChatMessage {
   timestamp: Date
 }
 
-const AgentDetail = ({ agent: initialAgent, onBack }: AgentDetailProps) => {
-  const [agent, setAgent] = useState(initialAgent)
+const AgentDetail = ({ agent: initialAgent }: AgentDetailProps) => {
+  const navigate = useNavigate()
+  const { id } = useParams<{ id: string }>()
+  const [agent, setAgent] = useState<Agent | null>(initialAgent || null)
+  const [loading, setLoading] = useState(!initialAgent)
+  const [error, setError] = useState<string | null>(null)
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [inputValue, setInputValue] = useState('')
   const [isLoading, setIsLoading] = useState(false)
   const [editingModel, setEditingModel] = useState(false)
-  const [selectedModel, setSelectedModel] = useState(agent.llmModel || '')
+  const [selectedModel, setSelectedModel] = useState('')
   const [isSavingModel, setIsSavingModel] = useState(false)
   const [isEditorOpen, setIsEditorOpen] = useState(false)
   const messagesEndRef = useRef<HTMLDivElement>(null)
@@ -44,7 +48,31 @@ const AgentDetail = ({ agent: initialAgent, onBack }: AgentDetailProps) => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages])
 
+  // Fetch agent data if not provided as prop
+  useEffect(() => {
+    if (!initialAgent && id) {
+      const fetchAgent = async () => {
+        try {
+          setLoading(true)
+          const response = await axios.get(`http://localhost:5000/api/agents/${id}`)
+          setAgent(response.data)
+          setSelectedModel(response.data.llmModel || '')
+        } catch (err: any) {
+          console.error('Failed to fetch agent:', err)
+          setError('Agent not found')
+        } finally {
+          setLoading(false)
+        }
+      }
+      fetchAgent()
+    } else if (initialAgent) {
+      setSelectedModel(initialAgent.llmModel || '')
+    }
+  }, [id, initialAgent])
+
   const handleSaveModel = async () => {
+    if (!agent) return
+    
     console.log('🔧 [DEBUG] handleSaveModel called')
     console.log('🔧 [DEBUG] selectedModel:', selectedModel)
     console.log('🔧 [DEBUG] agent.llmModel:', agent.llmModel)
@@ -67,7 +95,7 @@ const AgentDetail = ({ agent: initialAgent, onBack }: AgentDetailProps) => {
       })
       
       console.log('🔧 [DEBUG] Response received:', response.data)
-      setAgent(prev => ({ ...prev, llmModel: selectedModel }))
+      setAgent(prev => prev ? { ...prev, llmModel: selectedModel } : null)
       setEditingModel(false)
       console.log('✅ Agent LLM model updated successfully to:', selectedModel)
     } catch (error: any) {
@@ -82,6 +110,8 @@ const AgentDetail = ({ agent: initialAgent, onBack }: AgentDetailProps) => {
   }
 
   const handleSendMessage = async () => {
+    if (!agent) return
+    
     if (!inputValue.trim()) return
 
     console.log('💬 [DEBUG] Sending message...')
@@ -145,11 +175,34 @@ const AgentDetail = ({ agent: initialAgent, onBack }: AgentDetailProps) => {
     }
   }
 
+  if (loading) {
+    return (
+      <div className="agent-detail-page">
+        <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh' }}>
+          <div>Loading agent...</div>
+        </div>
+      </div>
+    )
+  }
+
+  if (error || !agent) {
+    return (
+      <div className="agent-detail-page">
+        <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh', flexDirection: 'column' }}>
+          <div>{error || 'Agent not found'}</div>
+          <button className="back-button" onClick={() => navigate('/dashboard')} style={{ marginTop: '1rem' }}>
+            ← Back to Dashboard
+          </button>
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div className="agent-detail-page">
       {/* Header */}
       <div className="agent-detail-header">
-        <button className="back-button" onClick={onBack}>
+        <button className="back-button" onClick={() => navigate('/dashboard')}>
           ← Back
         </button>
         <h1>{agent.name}</h1>

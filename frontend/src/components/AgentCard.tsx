@@ -96,6 +96,26 @@ const AgentCard = ({ agent, selected = false, onClick }: AgentCardProps) => {
           background: rgba(var(--card-bg-color, 0, 240, 255), 0.5);
         }
 
+        .agent-card:hover h3 {
+          color: rgba(255, 255, 255, 0.95);
+        }
+
+        .agent-card:hover .gen-text,
+        .agent-card:hover .gen-icon {
+          color: rgba(255, 255, 255, 0.95);
+        }
+
+        .agent-card:hover .generation-badge {
+          background: rgba(255, 255, 255, 0.1);
+          border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+
+        .agent-card:hover .skill-badge {
+          color: rgba(255, 255, 255, 0.95);
+          background: rgba(255, 255, 255, 0.1);
+          border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+
         .agent-card.selected {
           border: 2px solid var(--color-primary, #00F0FF);
           background: rgba(var(--card-bg-color, 0, 240, 255), 0.15);
@@ -184,8 +204,17 @@ const AgentCard = ({ agent, selected = false, onClick }: AgentCardProps) => {
           text-transform: capitalize;
           letter-spacing: 0.05em;
           white-space: nowrap;
+          cursor: pointer;
+          transition: all 0.2s ease;
           /* remove text shadow for flatter, cleaner feel */
           text-shadow: none;
+        }
+
+        .agent-card h3:hover {
+          text-decoration: underline;
+          text-decoration-color: rgba(var(--card-bg-color, 0, 240, 255), 0.6);
+          text-decoration-thickness: 2px;
+          text-underline-offset: 4px;
         }
 
         /* Metadata Section */

@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { Agent } from '../types'
 import AgentCard from './AgentCard'
 import SelectionToast from './SelectionToast'
@@ -9,12 +10,12 @@ import axios from 'axios'
 interface DashboardProps {
   walletAddress: string
   onStartBreeding: (parentA: Agent, parentB: Agent) => void
-  onViewAgent: (agent: Agent) => void
 }
 
 
 
-const Dashboard = ({ walletAddress, onStartBreeding, onViewAgent }: DashboardProps) => {
+const Dashboard = ({ walletAddress, onStartBreeding }: DashboardProps) => {
+  const navigate = useNavigate()
   const [agents, setAgents] = useState<Agent[]>([])
   const [selectedAgents, setSelectedAgents] = useState<Agent[]>([])
   const [showComparison, setShowComparison] = useState(false)
@@ -57,7 +58,7 @@ const Dashboard = ({ walletAddress, onStartBreeding, onViewAgent }: DashboardPro
     if (!searchQuery.trim()) {
       setFilteredAgents(agents)
     } else {
-      const query = searchQuery.toLowerCase()
+      const query: string = searchQuery.toLowerCase()
       const filtered = agents.filter(agent => {
         if (!agent) return false
         
@@ -66,7 +67,7 @@ const Dashboard = ({ walletAddress, onStartBreeding, onViewAgent }: DashboardPro
             (agent.name && typeof agent.name === 'string' && agent.name.toLowerCase().includes(query)) ||
             (agent.purpose && typeof agent.purpose === 'string' && agent.purpose.toLowerCase().includes(query)) ||
             (agent.instructions && typeof agent.instructions === 'string' && agent.instructions.toLowerCase().includes(query)) ||
-            (agent.skills && typeof agent.skills === 'string' && agent.skills.toLowerCase().includes(query))
+            (agent.skills && Array.isArray(agent.skills) && agent.skills.some(skill => skill.toLowerCase().includes(query)))
           )
         } catch (error) {
           console.error('Error filtering agent:', agent, error)
@@ -91,7 +92,7 @@ const Dashboard = ({ walletAddress, onStartBreeding, onViewAgent }: DashboardPro
   }, [])
 
   const handleAgentCardClick = (agent: Agent) => {
-    onViewAgent(agent)
+    navigate(`/agent/${agent.id}`)
   }
 
   const handleRemoveAgent = (agentId: string) => {

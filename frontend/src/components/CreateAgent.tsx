@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { Agent } from '../types'
 import AgentCreationProgress from './AgentCreationProgress'
 import axios from 'axios'
@@ -17,10 +17,8 @@ interface MintTransaction {
   message: string
 }
 
-const CreateAgent = ({ walletAddress, onAgentCreated, onStartBreeding }: CreateAgentProps) => {
-  const [agents, setAgents] = useState<Agent[]>([])
+const CreateAgent = ({ walletAddress, onAgentCreated }: CreateAgentProps) => {
   const [isCreating, setIsCreating] = useState(false)
-  const [selectedParents, setSelectedParents] = useState<[Agent | null, Agent | null]>([null, null])
   const [showProgress, setShowProgress] = useState(false)
   const [progressStep, setProgressStep] = useState<ProgressStep>('validating')
   const [errorMessage, setErrorMessage] = useState('')
@@ -45,22 +43,6 @@ const CreateAgent = ({ walletAddress, onAgentCreated, onStartBreeding }: CreateA
     { id: 'microsoft/wizardlm-2-8x22b:free', name: 'WizardLM-2 8x22B (Free)', provider: 'Microsoft' },
     { id: 'mistralai/mistral-7b-instruct:free', name: 'Mistral 7B Instruct (Free)', provider: 'Mistral' }
   ]
-
-  // Load user's agents
-  useEffect(() => {
-    loadUserAgents()
-  }, [walletAddress])
-
-  const loadUserAgents = async () => {
-    try {
-      const response = await axios.get(`http://localhost:5000/api/agents?owner=${walletAddress}`)
-      setAgents(response.data.agents || [])
-      console.log(`✅ Loaded ${response.data.agents?.length || 0} agents for ${walletAddress}`)
-    } catch (error) {
-      console.error('Failed to load agents:', error)
-      setAgents([])
-    }
-  }
 
   const handleInputChange = (field: string, value: string | File | null) => {
     setFormData(prev => ({ ...prev, [field]: value }))
@@ -153,7 +135,6 @@ const CreateAgent = ({ walletAddress, onAgentCreated, onStartBreeding }: CreateA
         
         // Still reload agents - agent was created successfully
         setTimeout(() => {
-          loadUserAgents()
           onAgentCreated(createdAgent)
         }, 5000) // Give user time to read the error
       } else {
@@ -175,7 +156,6 @@ const CreateAgent = ({ walletAddress, onAgentCreated, onStartBreeding }: CreateA
 
         // Reload agents after creation
         setTimeout(() => {
-          loadUserAgents()
           onAgentCreated(createdAgent)
         }, 1500)
       }
@@ -186,21 +166,6 @@ const CreateAgent = ({ walletAddress, onAgentCreated, onStartBreeding }: CreateA
       setErrorMessage(error.response?.data?.error || 'Failed to create agent. Please try again.')
     } finally {
       setIsCreating(false)
-    }
-  }
-
-  const handleSelectParent = (agent: Agent) => {
-    setSelectedParents(prev => {
-      const [a, b] = prev
-      if (!a) return [agent, b]
-      if (!b) return [a, agent]
-      return [agent, b] // Replace second if both selected
-    })
-  }
-
-  const handleBreedSelected = () => {
-    if (selectedParents[0] && selectedParents[1]) {
-      onStartBreeding(selectedParents[0], selectedParents[1])
     }
   }
 
@@ -331,7 +296,9 @@ const CreateAgent = ({ walletAddress, onAgentCreated, onStartBreeding }: CreateA
                     setCreatedAgent(null)
                     
                     // Reload agents to show updated status
-                    setTimeout(() => loadUserAgents(), 3000)
+                    setTimeout(() => {
+                      onAgentCreated(createdAgent)
+                    }, 3000)
                   } catch (error: any) {
                     console.error('❌ Wallet signing failed:', error)
                     if (error.code === -2) {
