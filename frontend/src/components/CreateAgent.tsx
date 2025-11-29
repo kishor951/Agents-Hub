@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Agent } from '../types'
 import AgentCreationProgress from './AgentCreationProgress'
 import axios from 'axios'
@@ -23,7 +23,16 @@ const CreateAgent = ({ walletAddress, onAgentCreated }: CreateAgentProps) => {
   const [progressStep, setProgressStep] = useState<ProgressStep>('validating')
   const [errorMessage, setErrorMessage] = useState('')
   const [pendingMintTx, setPendingMintTx] = useState<MintTransaction | null>(null)
+  const [isDragOver, setIsDragOver] = useState(false)
   const [createdAgent, setCreatedAgent] = useState<Agent | null>(null)
+
+  // Track completion status
+  const [coreCompleted, setCoreCompleted] = useState(false)
+  const [advancedCompleted, setAdvancedCompleted] = useState(false)
+  const [section2Active, setSection2Active] = useState(false)
+
+  // Template modal state
+  const [showTemplateModal, setShowTemplateModal] = useState(false)
 
   // Form state for creating agent
   const [formData, setFormData] = useState({
@@ -35,6 +44,22 @@ const CreateAgent = ({ walletAddress, onAgentCreated }: CreateAgentProps) => {
     llmModel: 'x-ai/grok-4.1-fast:free',
     picture: null as File | null
   })
+
+  // Check core completion
+  useEffect(() => {
+    const isCoreComplete = formData.name.trim() !== '' && 
+                          formData.purpose.trim() !== '' && 
+                          formData.instructions.trim() !== '';
+    setCoreCompleted(isCoreComplete);
+  }, [formData.name, formData.purpose, formData.instructions]);
+
+  // Check advanced completion
+  useEffect(() => {
+    const isAdvancedComplete = formData.personality.trim() !== '' && 
+                              formData.skills.trim() !== '' && 
+                              formData.picture !== null;
+    setAdvancedCompleted(isAdvancedComplete);
+  }, [formData.personality, formData.skills, formData.picture]);
 
   // Free LLM models from Open Router
   const freeModels = [
@@ -48,9 +73,64 @@ const CreateAgent = ({ walletAddress, onAgentCreated }: CreateAgentProps) => {
     setFormData(prev => ({ ...prev, [field]: value }))
   }
 
+  // Handle skills input with comma separation
+  const handleSkillsChange = (value: string) => {
+    // Allow typing but don't add to formData yet - wait for comma
+    setFormData(prev => ({ ...prev, skills: value }))
+  }
+
+  const handleSkillsKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === ',' || e.key === 'Enter') {
+      e.preventDefault()
+      const currentValue = formData.skills.trim()
+      if (currentValue && !getSkillsArray().includes(currentValue.replace(',', ''))) {
+        // Add the skill without the comma
+        const newSkill = currentValue.replace(',', '').trim()
+        const currentSkills = getSkillsArray()
+        const updatedSkills = [...currentSkills, newSkill].join(', ')
+        setFormData(prev => ({ ...prev, skills: updatedSkills + ', ' }))
+      } else {
+        // Just clean up the input
+        setFormData(prev => ({ ...prev, skills: getSkillsArray().join(', ') + (getSkillsArray().length > 0 ? ', ' : '') }))
+      }
+    }
+  }
+
+  const getSkillsArray = (): string[] => {
+    return formData.skills
+      .split(',')
+      .map(skill => skill.trim())
+      .filter(skill => skill.length > 0)
+  }
+
+  const removeSkill = (skillToRemove: string) => {
+    const currentSkills = getSkillsArray()
+    const updatedSkills = currentSkills.filter(skill => skill !== skillToRemove)
+    setFormData(prev => ({ ...prev, skills: updatedSkills.join(', ') + (updatedSkills.length > 0 ? ', ' : '') }))
+  }
+
   const handlePictureUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0] || null
     handleInputChange('picture', file)
+  }
+
+  const handleDrop = (event: React.DragEvent<HTMLDivElement>) => {
+    event.preventDefault()
+    setIsDragOver(false)
+    const file = event.dataTransfer.files?.[0]
+    if (file && file.type.startsWith('image/')) {
+      handleInputChange('picture', file)
+    }
+  }
+
+  const handleDragOver = (event: React.DragEvent<HTMLDivElement>) => {
+    event.preventDefault()
+    setIsDragOver(true)
+  }
+
+  const handleDragLeave = (event: React.DragEvent<HTMLDivElement>) => {
+    event.preventDefault()
+    setIsDragOver(false)
   }
 
   const handleCreateAgent = async () => {
@@ -97,8 +177,8 @@ const CreateAgent = ({ walletAddress, onAgentCreated }: CreateAgentProps) => {
       setProgressStep('minting')
       await new Promise(resolve => setTimeout(resolve, 800))
 
-      const createdAgent = response.data.agent
-      setCreatedAgent(createdAgent)
+      const agent = response.data.agent
+      setCreatedAgent(agent)
 
       console.log('📦 Agent created:', createdAgent)
       console.log('💳 Mint TX data:', response.data.mintTx)
@@ -135,7 +215,7 @@ const CreateAgent = ({ walletAddress, onAgentCreated }: CreateAgentProps) => {
         
         // Still reload agents - agent was created successfully
         setTimeout(() => {
-          onAgentCreated(createdAgent)
+          onAgentCreated(agent)
         }, 5000) // Give user time to read the error
       } else {
         console.log('⚠️ No mint transaction returned from backend')
@@ -156,7 +236,7 @@ const CreateAgent = ({ walletAddress, onAgentCreated }: CreateAgentProps) => {
 
         // Reload agents after creation
         setTimeout(() => {
-          onAgentCreated(createdAgent)
+          onAgentCreated(agent)
         }, 1500)
       }
 
@@ -313,7 +393,7 @@ const CreateAgent = ({ walletAddress, onAgentCreated }: CreateAgentProps) => {
                   }
                 }}
               >
-                🔐 Sign with Lace Wallet
+                Sign with Lace Wallet
               </button>
               <button
                 className="mint-btn secondary"
@@ -336,73 +416,239 @@ const CreateAgent = ({ walletAddress, onAgentCreated }: CreateAgentProps) => {
         </div>
       )}
 
+      {/* Template Modal */}
+      {showTemplateModal && (
+        <div className="modal-overlay" style={{ zIndex: 9999 }}>
+          <div className="template-modal">
+            <div className="modal-header">
+              <h2>📋 Marketing Agent Template</h2>
+              <p>Use this template to quickly create a marketing-focused AI agent</p>
+              <button
+                className="close-btn"
+                onClick={() => setShowTemplateModal(false)}
+                title="Close"
+              >
+                ×
+              </button>
+            </div>
+
+            <div className="template-content">
+              {/* Template Form Preview */}
+              <div className="template-form-section">
+                <h3 className="section-header">
+                  <span className="section-number">1</span>
+                  Core Agent Details
+                </h3>
+
+                <div className="template-form">
+                  <div className="form-group">
+                    <label>Agent Name <span className="required-star">*</span></label>
+                    <div className="template-value">MarketingPro AI</div>
+                  </div>
+
+                  <div className="form-group">
+                    <label>Purpose <span className="required-star">*</span></label>
+                    <div className="template-value">
+                      A specialized AI agent for creating compelling marketing content, analyzing market trends, and developing comprehensive marketing strategies for businesses.
+                    </div>
+                  </div>
+
+                  <div className="form-group">
+                    <label>Instructions <span className="required-star">*</span></label>
+                    <div className="template-value">
+                      You are MarketingPro AI, an expert marketing strategist and content creator. Your role is to help businesses create effective marketing campaigns, analyze market data, and develop strategies that drive growth. Always provide actionable insights, creative ideas, and data-driven recommendations. Focus on ROI, audience targeting, and measurable results. Use modern marketing techniques including social media, content marketing, SEO, and conversion optimization.
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div className="template-form-section">
+                <h3 className="section-header">
+                  <span className="section-number">2</span>
+                  Advanced Configuration
+                </h3>
+
+                <div className="template-form">
+                  <div className="form-group">
+                    <label>Personality</label>
+                    <div className="template-value">
+                      Professional yet approachable, data-driven with creative flair, confident in recommendations, focused on results and ROI, enthusiastic about marketing innovation.
+                    </div>
+                  </div>
+
+                  <div className="form-group">
+                    <label>Skills</label>
+                    <div className="template-skills">
+                      <span className="skill-tag">Content Marketing</span>
+                      <span className="skill-tag">SEO Optimization</span>
+                      <span className="skill-tag">Social Media Strategy</span>
+                      <span className="skill-tag">Market Research</span>
+                      <span className="skill-tag">Brand Development</span>
+                      <span className="skill-tag">Analytics</span>
+                      <span className="skill-tag">Copywriting</span>
+                      <span className="skill-tag">Campaign Management</span>
+                    </div>
+                  </div>
+
+                  <div className="form-group">
+                    <label>LLM Model</label>
+                    <div className="template-value">Grok 4.1 Fast (Free)</div>
+                  </div>
+
+                  <div className="form-group">
+                    <label>Agent Picture</label>
+                    <div className="template-value">Upload a professional marketing-themed image</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="template-actions">
+              <button
+                className="template-apply-btn"
+                onClick={() => {
+                  // Apply template data to main form
+                  setFormData({
+                    name: 'MarketingPro AI',
+                    purpose: 'A specialized AI agent for creating compelling marketing content, analyzing market trends, and developing comprehensive marketing strategies for businesses.',
+                    instructions: 'You are MarketingPro AI, an expert marketing strategist and content creator. Your role is to help businesses create effective marketing campaigns, analyze market data, and develop strategies that drive growth. Always provide actionable insights, creative ideas, and data-driven recommendations. Focus on ROI, audience targeting, and measurable results. Use modern marketing techniques including social media, content marketing, SEO, and conversion optimization.',
+                    personality: 'Professional yet approachable, data-driven with creative flair, confident in recommendations, focused on results and ROI, enthusiastic about marketing innovation.',
+                    skills: 'Content Marketing, SEO Optimization, Social Media Strategy, Market Research, Brand Development, Analytics, Copywriting, Campaign Management',
+                    llmModel: 'x-ai/grok-4.1-fast:free',
+                    picture: null
+                  })
+                  setShowTemplateModal(false)
+                }}
+              >
+                Use This Template
+              </button>
+              <button
+                className="template-cancel-btn"
+                onClick={() => setShowTemplateModal(false)}
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="create-agent-container">
         {/* Header */}
-        <div className="page-header">
-          <h1>Create AI Agents</h1>
+        <div className="header-section">
+          <div className="plain-text">
+            Create your <span className="super-word">super</span> agent!
+          </div>
+          <button
+            className="template-btn"
+            onClick={() => setShowTemplateModal(true)}
+            title="Use Marketing Agent Template"
+          >
+            Template
+          </button>
         </div>
 
         <div className="create-agent-content">
           {/* Create Agent Form */}
-          <div className="create-form-section">
+          <div className={`create-form-section ${coreCompleted ? 'section-completed' : ''} ${coreCompleted && section2Active ? 'section-dimmed' : ''}`}>
+            <h2 className="section-header">
+              <span className="section-number">1</span>
+              Core Agent Details
+              {coreCompleted && <span className="section-check">✓</span>}
+            </h2>
 
             <div className="create-form">
               <div className="form-group">
-                <label htmlFor="name">Agent Name *</label>
+                <label htmlFor="name">Agent Name <span className="required-star">*</span></label>
                 <input
                   type="text"
                   id="name"
                   value={formData.name}
                   onChange={(e) => handleInputChange('name', e.target.value)}
+                  onFocus={() => setSection2Active(false)}
                   placeholder="e.g., CodeMaster Pro"
                   required
                 />
               </div>
 
               <div className="form-group">
-                <label htmlFor="purpose">Purpose *</label>
+                <label htmlFor="purpose">Purpose <span className="required-star">*</span></label>
                 <textarea
                   id="purpose"
                   value={formData.purpose}
                   onChange={(e) => handleInputChange('purpose', e.target.value)}
+                  onFocus={() => setSection2Active(false)}
                   placeholder="What is this agent's main purpose?"
-                  rows={3}
+                  rows={6}
                   required
                 />
               </div>
 
               <div className="form-group">
-                <label htmlFor="instructions">Instructions *</label>
+                <label htmlFor="instructions">Instructions <span className="required-star">*</span></label>
                 <textarea
                   id="instructions"
                   value={formData.instructions}
                   onChange={(e) => handleInputChange('instructions', e.target.value)}
+                  onFocus={() => setSection2Active(false)}
                   placeholder="Detailed instructions for how the agent should behave"
-                  rows={5}
+                  rows={20}
                   required
                 />
               </div>
+            </div>
+          </div>
 
+          <div className={`create-form-section ${!coreCompleted ? 'section-disabled' : ''} ${advancedCompleted ? 'section-completed' : ''}`}>
+            <h2 className="section-header">
+              <span className="section-number">2</span>
+              Advanced Configuration
+              {advancedCompleted && <span className="section-check">✓</span>}
+            </h2>
+
+            <div className="create-form">
               <div className="form-group">
                 <label htmlFor="personality">Personality</label>
                 <textarea
                   id="personality"
                   value={formData.personality}
                   onChange={(e) => handleInputChange('personality', e.target.value)}
+                  onFocus={() => coreCompleted && setSection2Active(true)}
                   placeholder="Describe the agent's personality and communication style"
                   rows={3}
+                  disabled={!coreCompleted}
                 />
               </div>
 
               <div className="form-group">
                 <label htmlFor="skills">Skills</label>
-                <input
-                  type="text"
-                  id="skills"
-                  value={formData.skills}
-                  onChange={(e) => handleInputChange('skills', e.target.value)}
-                  placeholder="e.g., React, TypeScript, Node.js (comma separated)"
-                />
+                <div className="skills-container">
+                  <div className="skills-tags">
+                    {getSkillsArray().map((skill, index) => (
+                      <span key={index} className="skill-tag">
+                        {skill}
+                        <button
+                          type="button"
+                          className="skill-tag-remove"
+                          onClick={() => removeSkill(skill)}
+                          title={`Remove ${skill}`}
+                        >
+                          ×
+                        </button>
+                      </span>
+                    ))}
+                  </div>
+                  <input
+                    type="text"
+                    id="skills"
+                    value={formData.skills}
+                    onChange={(e) => handleSkillsChange(e.target.value)}
+                    onKeyDown={handleSkillsKeyDown}
+                    placeholder={getSkillsArray().length === 0 ? "e.g., React, TypeScript, Node.js" : "Add another skill..."}
+                    disabled={!coreCompleted}
+                    className="skills-input"
+                  />
+                </div>
               </div>
 
               <div className="form-group">
@@ -411,6 +657,8 @@ const CreateAgent = ({ walletAddress, onAgentCreated }: CreateAgentProps) => {
                   id="llmModel"
                   value={formData.llmModel}
                   onChange={(e) => handleInputChange('llmModel', e.target.value)}
+                  onFocus={() => coreCompleted && setSection2Active(true)}
+                  disabled={!coreCompleted}
                 >
                   {freeModels.map(model => (
                     <option key={model.id} value={model.id}>
@@ -422,23 +670,50 @@ const CreateAgent = ({ walletAddress, onAgentCreated }: CreateAgentProps) => {
 
               <div className="form-group">
                 <label htmlFor="picture">Agent Picture</label>
-                <input
-                  type="file"
-                  id="picture"
-                  accept="image/*"
-                  onChange={handlePictureUpload}
-                />
-                {formData.picture && (
-                  <div className="picture-preview">
-                    <img src={URL.createObjectURL(formData.picture)} alt="Preview" />
-                  </div>
-                )}
+                <div
+                  className={`drop-zone ${isDragOver ? 'drag-over' : ''} ${!coreCompleted ? 'disabled' : ''}`}
+                  onDrop={coreCompleted ? handleDrop : undefined}
+                  onDragOver={coreCompleted ? handleDragOver : undefined}
+                  onDragLeave={coreCompleted ? handleDragLeave : undefined}
+                  onClick={coreCompleted ? () => document.getElementById('picture')?.click() : undefined}
+                  style={{ cursor: coreCompleted ? 'pointer' : 'not-allowed' }}
+                >
+                  <input
+                    type="file"
+                    id="picture"
+                    accept="image/*"
+                    onChange={handlePictureUpload}
+                    style={{ display: 'none' }}
+                    disabled={!coreCompleted}
+                  />
+                  {formData.picture ? (
+                    <div className="picture-preview">
+                      <img src={URL.createObjectURL(formData.picture)} alt="Preview" />
+                      <button
+                        className="delete-image-btn"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleInputChange('picture', null);
+                        }}
+                        title="Remove image"
+                      >
+                        ×
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="drop-zone-content">
+                      <div className="drop-icon">+</div>
+                      <p>{coreCompleted ? 'Drop an image here or click to browse' : 'Complete Section 1 first'}</p>
+                      <small>{coreCompleted ? 'PNG, JPG, GIF up to 10MB' : 'Section 1 must be completed'}</small>
+                    </div>
+                  )}
+                </div>
               </div>
 
               <button
                 className="create-agent-btn"
                 onClick={handleCreateAgent}
-                disabled={isCreating}
+                disabled={isCreating || !coreCompleted}
               >
                 {isCreating ? 'Creating...' : 'Create Agent'}
               </button>
@@ -448,10 +723,30 @@ const CreateAgent = ({ walletAddress, onAgentCreated }: CreateAgentProps) => {
       </div>
 
       <style>{`
-        .create-agent-page {
-          max-width: 1600px;
-          margin: 0 auto;
-          padding: 0 2rem 2rem 2rem;
+        .header-section {
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          gap: 2rem;
+          margin-bottom: 2rem;
+        }
+
+        .template-btn {
+          padding: 0.75rem 1.5rem;
+          background: transparent;
+          border: 2px solid #8b5cf6;
+          border-radius: 8px;
+          color: #8b5cf6;
+          font-weight: 600;
+          font-size: 0.9rem;
+          cursor: pointer;
+          transition: all 0.2s;
+        }
+
+        .template-btn:hover {
+          background: rgba(139, 92, 246, 0.1);
+          transform: translateY(-1px);
+          box-shadow: 0 4px 12px rgba(139, 92, 246, 0.3);
         }
 
         .page-header {
@@ -460,26 +755,35 @@ const CreateAgent = ({ walletAddress, onAgentCreated }: CreateAgentProps) => {
           margin-top: 1.5rem;
         }
 
-        .page-header h1 {
-          font-size: 2.2rem;
-          background: linear-gradient(135deg, #8b5cf6 0%, #6366f1 100%);
-          -webkit-background-clip: text;
-          -webkit-text-fill-color: transparent;
-          margin-bottom: 0.5rem;
-        }
-
-        .catchy-line {
-          font-size: 4rem;
-          color: #FFFFFF;
-          font-weight: 600;
-          text-align: center;
-          margin-bottom: 1rem;
-          font-family: var(--font-headline, 'Tomorrow', sans-serif);
-        }
-
         .page-header p {
           color: #94a3b8;
           font-size: 1rem;
+        }
+
+        /* Plain Text */
+        .plain-text {
+          font-size: 4rem;
+          font-weight: 600;
+          color: #FFFFFF;
+          text-align: center;
+          margin-top: 2.5rem;
+          margin-bottom: 2rem;
+          font-family: var(--font-headline, 'Tomorrow', sans-serif);
+        }
+
+        .super-word {
+          color: #8b5cf6;
+          text-shadow: 0 0 10px rgba(139, 92, 246, 0.5);
+          animation: glow 2s ease-in-out infinite alternate;
+        }
+
+        @keyframes glow {
+          from {
+            text-shadow: 0 0 10px rgba(139, 92, 246, 0.5);
+          }
+          to {
+            text-shadow: 0 0 20px rgba(139, 92, 246, 0.8), 0 0 30px rgba(139, 92, 246, 0.6);
+          }
         }
 
         .create-agent-content {
@@ -493,6 +797,34 @@ const CreateAgent = ({ walletAddress, onAgentCreated }: CreateAgentProps) => {
           font-size: 1.35rem;
           margin-bottom: 1.25rem;
           color: #e2e8f0;
+        }
+
+        .section-header {
+          display: flex;
+          align-items: center;
+          gap: 0.75rem;
+          font-size: 1.35rem;
+          margin-bottom: 1.25rem;
+          color: #e2e8f0;
+        }
+
+        .section-number {
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          width: 28px;
+          height: 28px;
+          background: linear-gradient(135deg, #8b5cf6 0%, #6366f1 100%);
+          color: white;
+          border-radius: 50%;
+          font-weight: 600;
+          font-size: 0.9rem;
+        }
+
+        .section-check {
+          color: #22c55e;
+          font-size: 1.2rem;
+          font-weight: bold;
         }
 
         .create-form {
@@ -511,6 +843,10 @@ const CreateAgent = ({ walletAddress, onAgentCreated }: CreateAgentProps) => {
           margin-bottom: 0.5rem;
           font-weight: 600;
           color: #cbd5e1;
+        }
+
+        .required-star {
+          color: #8b5cf6;
         }
 
         .form-group input,
@@ -533,8 +869,18 @@ const CreateAgent = ({ walletAddress, onAgentCreated }: CreateAgentProps) => {
           box-shadow: 0 0 0 2px rgba(139, 92, 246, 0.2);
         }
 
+        #purpose {
+          min-height: 120px;
+        }
+
+        #instructions {
+          min-height: 300px;
+        }
+
         .picture-preview {
           margin-top: 1rem;
+          position: relative;
+          display: inline-block;
         }
 
         .picture-preview img {
@@ -542,6 +888,75 @@ const CreateAgent = ({ walletAddress, onAgentCreated }: CreateAgentProps) => {
           max-height: 200px;
           border-radius: 8px;
           border: 2px solid rgba(139, 92, 246, 0.3);
+        }
+
+        .delete-image-btn {
+          position: absolute;
+          top: -8px;
+          right: -8px;
+          width: 24px;
+          height: 24px;
+          background: #ef4444;
+          color: white;
+          border: none;
+          border-radius: 50%;
+          font-size: 16px;
+          font-weight: bold;
+          cursor: pointer;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+          transition: all 0.2s;
+        }
+
+        .delete-image-btn:hover {
+          background: #dc2626;
+          transform: scale(1.1);
+        }
+
+        .drop-zone {
+          border: 2px dashed rgba(139, 92, 246, 0.3);
+          border-radius: 8px;
+          padding: 2rem;
+          text-align: center;
+          cursor: pointer;
+          transition: all 0.3s ease;
+          background: rgba(255, 255, 255, 0.02);
+        }
+
+        .drop-zone:hover {
+          border-color: rgba(139, 92, 246, 0.6);
+          background: rgba(139, 92, 246, 0.05);
+        }
+
+        .drop-zone.drag-over {
+          border-color: #8b5cf6;
+          background: rgba(139, 92, 246, 0.1);
+          transform: scale(1.02);
+        }
+
+        .drop-zone-content {
+          color: #cbd5e1;
+        }
+
+        .drop-icon {
+          font-size: 4rem;
+          font-weight: 300;
+          margin-bottom: 1rem;
+          opacity: 0.7;
+          color: #8b5cf6;
+          line-height: 1;
+        }
+
+        .drop-zone-content p {
+          margin: 0.5rem 0;
+          font-weight: 500;
+        }
+
+        .drop-zone-content small {
+          color: #94a3b8;
+          font-size: 0.8rem;
         }
 
         .create-agent-btn {
@@ -560,6 +975,92 @@ const CreateAgent = ({ walletAddress, onAgentCreated }: CreateAgentProps) => {
         .create-agent-btn:hover:not(:disabled) {
           transform: translateY(-2px);
           box-shadow: 0 4px 12px rgba(139, 92, 246, 0.4);
+        }
+
+        .section-disabled {
+          opacity: 0.4;
+          pointer-events: none;
+        }
+
+        .section-disabled .section-header {
+          color: #64748b;
+        }
+
+        .section-disabled .section-number {
+          background: linear-gradient(135deg, #64748b 0%, #475569 100%);
+        }
+
+        .section-disabled .create-form {
+          background: rgba(15, 23, 42, 0.3);
+          border-color: rgba(100, 116, 139, 0.2);
+        }
+
+        .section-disabled .form-group label {
+          color: #64748b;
+        }
+
+        .section-disabled .form-group input,
+        .section-disabled .form-group textarea,
+        .section-disabled .form-group select {
+          background: rgba(255, 255, 255, 0.03);
+          border-color: rgba(100, 116, 139, 0.3);
+          color: #64748b;
+        }
+
+        .section-completed .section-header {
+          background: rgba(34, 197, 94, 0.1);
+          border: 1px solid rgba(34, 197, 94, 0.3);
+          border-radius: 8px;
+          padding: 0.75rem 1rem;
+          margin-bottom: 1.25rem;
+        }
+
+        .section-dimmed {
+          opacity: 0.6;
+        }
+
+        .section-dimmed .section-header {
+          color: #94a3b8;
+        }
+
+        .section-dimmed .section-number {
+          background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
+          opacity: 0.7;
+        }
+
+        .section-dimmed .create-form {
+          background: rgba(15, 23, 42, 0.4);
+          border-color: rgba(139, 92, 246, 0.15);
+        }
+
+        .section-dimmed .form-group label {
+          color: #94a3b8;
+        }
+
+        .section-dimmed .form-group input,
+        .section-dimmed .form-group textarea,
+        .section-dimmed .form-group select {
+          background: rgba(255, 255, 255, 0.04);
+          border-color: rgba(139, 92, 246, 0.2);
+          color: #94a3b8;
+        }
+
+        .drop-zone.disabled {
+          border-color: rgba(100, 116, 139, 0.3);
+          background: rgba(255, 255, 255, 0.01);
+        }
+
+        .drop-zone.disabled:hover {
+          border-color: rgba(100, 116, 139, 0.3);
+          background: rgba(255, 255, 255, 0.01);
+        }
+
+        .drop-zone.disabled .drop-zone-content {
+          color: #64748b;
+        }
+
+        .drop-zone.disabled .drop-icon {
+          opacity: 0.4;
         }
 
         .create-agent-btn:disabled {
@@ -708,8 +1209,31 @@ const CreateAgent = ({ walletAddress, onAgentCreated }: CreateAgentProps) => {
             gap: 2rem;
           }
 
-          .page-header h1 {
-            font-size: 2rem;
+          .plain-text {
+            font-size: 3rem;
+          }
+
+          .header-section {
+            flex-direction: column;
+            gap: 1rem;
+          }
+
+          .template-content {
+            grid-template-columns: 1fr;
+            gap: 1.5rem;
+          }
+
+          .template-modal .modal-header {
+            padding: 1rem 1.5rem;
+          }
+
+          .template-content {
+            padding: 1.5rem;
+          }
+
+          .template-actions {
+            padding: 1rem 1.5rem;
+            flex-direction: column;
           }
         }
 
@@ -722,10 +1246,14 @@ const CreateAgent = ({ walletAddress, onAgentCreated }: CreateAgentProps) => {
           bottom: 0;
           background: rgba(0, 0, 0, 0.7);
           backdrop-filter: blur(4px);
+          -webkit-backdrop-filter: blur(4px);
           display: flex;
-          align-items: center;
+          /* push modal lower so header isn't hidden behind fixed navbar */
+          align-items: flex-start;
           justify-content: center;
+          padding-top: 80px;
           z-index: 1000;
+          overflow-y: auto;
         }
 
         .mint-modal {
@@ -846,6 +1374,209 @@ const CreateAgent = ({ walletAddress, onAgentCreated }: CreateAgentProps) => {
 
         .mint-info-box strong {
           color: #bfdbfe;
+        }
+
+        /* Template Modal Styles */
+        .template-modal {
+          background: linear-gradient(135deg, rgba(30, 41, 59, 0.95) 0%, rgba(15, 23, 42, 0.95) 100%);
+          border: 1px solid rgba(139, 92, 246, 0.3);
+          border-radius: 12px;
+          padding: 0;
+          max-width: 1200px;
+          width: 95%;
+          max-height: 90vh;
+          overflow-y: auto;
+          box-shadow: 0 20px 25px rgba(0, 0, 0, 0.3);
+        }
+
+        .template-modal .modal-header {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          padding: 1.5rem 2rem;
+          border-bottom: 1px solid rgba(139, 92, 246, 0.2);
+          margin-bottom: 0;
+        }
+
+        .template-modal .modal-header h2 {
+          margin: 0;
+          font-size: 1.5rem;
+          color: #e2e8f0;
+        }
+
+        .template-modal .modal-header p {
+          margin: 0.25rem 0 0 0;
+          color: #cbd5e1;
+          font-size: 0.9rem;
+        }
+
+        .close-btn {
+          background: none;
+          border: none;
+          color: #94a3b8;
+          font-size: 24px;
+          cursor: pointer;
+          padding: 0;
+          width: 32px;
+          height: 32px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          border-radius: 50%;
+          transition: all 0.2s;
+        }
+
+        .close-btn:hover {
+          background: rgba(139, 92, 246, 0.1);
+          color: #e2e8f0;
+        }
+
+        .template-content {
+          padding: 2rem;
+          display: grid;
+          grid-template-columns: 1fr 1fr;
+          gap: 2rem;
+        }
+
+        .template-form-section h3 {
+          font-size: 1.1rem;
+          margin-bottom: 1rem;
+          color: #e2e8f0;
+        }
+
+        .template-form {
+          background: rgba(15, 23, 42, 0.5);
+          border: 1px solid rgba(139, 92, 246, 0.2);
+          border-radius: 8px;
+          padding: 1.25rem;
+        }
+
+        .template-value {
+          background: rgba(255, 255, 255, 0.05);
+          border: 1px solid rgba(139, 92, 246, 0.2);
+          border-radius: 6px;
+          padding: 0.75rem;
+          color: #e2e8f0;
+          font-size: 0.85rem;
+          line-height: 1.4;
+          white-space: pre-wrap;
+        }
+
+        .template-skills {
+          display: flex;
+          flex-wrap: wrap;
+          gap: 6px;
+        }
+
+        .template-actions {
+          display: flex;
+          gap: 1rem;
+          padding: 1.5rem 2rem;
+          border-top: 1px solid rgba(139, 92, 246, 0.2);
+          background: rgba(15, 23, 42, 0.3);
+        }
+
+        .template-apply-btn {
+          flex: 1;
+          padding: 0.875rem;
+          background: linear-gradient(135deg, #8b5cf6 0%, #6366f1 100%);
+          border: none;
+          border-radius: 8px;
+          color: white;
+          font-weight: 600;
+          cursor: pointer;
+          transition: all 0.2s;
+        }
+
+        .template-apply-btn:hover {
+          transform: translateY(-2px);
+          box-shadow: 0 4px 12px rgba(139, 92, 246, 0.4);
+        }
+
+        .template-cancel-btn {
+          flex: 1;
+          padding: 0.875rem;
+          background: rgba(139, 92, 246, 0.1);
+          border: 1px solid rgba(139, 92, 246, 0.3);
+          border-radius: 8px;
+          color: #cbd5e1;
+          font-weight: 600;
+          cursor: pointer;
+          transition: all 0.2s;
+        }
+
+        .template-cancel-btn:hover {
+          background: rgba(139, 92, 246, 0.15);
+        }
+        .skills-container {
+          display: flex;
+          flex-direction: column;
+          gap: 8px;
+        }
+
+        .skills-tags {
+          display: flex;
+          flex-wrap: wrap;
+          gap: 6px;
+        }
+
+        .skill-tag {
+          display: inline-flex;
+          align-items: center;
+          background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+          color: white;
+          padding: 4px 8px;
+          border-radius: 16px;
+          font-size: 14px;
+          font-weight: 500;
+          border: none;
+          box-shadow: 0 2px 4px rgba(102, 126, 234, 0.3);
+        }
+
+        .skill-tag-remove {
+          background: none;
+          border: none;
+          color: white;
+          cursor: pointer;
+          font-size: 16px;
+          font-weight: bold;
+          margin-left: 6px;
+          padding: 0;
+          width: 16px;
+          height: 16px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          border-radius: 50%;
+          transition: background-color 0.2s;
+        }
+
+        .skill-tag-remove:hover {
+          background-color: rgba(255, 255, 255, 0.2);
+        }
+
+        .skills-input {
+          width: 100%;
+          padding: 0.75rem;
+          background: rgba(255, 255, 255, 0.05);
+          border: 1px solid rgba(139, 92, 246, 0.3);
+          border-radius: 6px;
+          color: #e2e8f0;
+          font-size: 0.9rem;
+          transition: border-color 0.3s, box-shadow 0.3s;
+        }
+
+        .skills-input:focus {
+          outline: none;
+          border-color: #8b5cf6;
+          box-shadow: 0 0 0 2px rgba(139, 92, 246, 0.2);
+        }
+
+        .skills-input:disabled {
+          background: rgba(255, 255, 255, 0.03);
+          border-color: rgba(100, 116, 139, 0.3);
+          color: #64748b;
+          cursor: not-allowed;
         }
       `}</style>
     </div>

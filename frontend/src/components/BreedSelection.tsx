@@ -45,15 +45,17 @@ const BreedSelection = ({ walletAddress, onStartBreeding }: BreedSelectionProps)
   return (
     <div className="breed-selection-page">
       <div className="page-header">
-        <h1>🧬 Breed Your Agents</h1>
         <div className="catchy-line">
-          Why should Humans have all the Fun?
+          Should Humans have <span className="super-word">all the Fun?</span>
         </div>
       </div>
 
       {/* My Agents Section */}
       <div className="my-agents-section">
-        <h2>🤖 My Agents ({agents.length})</h2>
+        <h2 className="section-header">
+          <span className="section-number">{`\u00A0`}</span>
+          Agents available ({agents.length})
+        </h2>
         {agents.length === 0 ? (
           <div className="empty-agents">
             <p>You haven't created any agents yet.</p>
@@ -152,10 +154,54 @@ const BreedSelection = ({ walletAddress, onStartBreeding }: BreedSelectionProps)
           margin-bottom: 1rem;
         }
 
+        .super-word {
+          color: #8b5cf6;
+          text-shadow: 0 0 10px rgba(139, 92, 246, 0.5);
+          animation: glow 2s ease-in-out infinite alternate;
+        }
+
+        @keyframes glow {
+          from {
+            text-shadow: 0 0 10px rgba(139, 92, 246, 0.5);
+          }
+          to {
+            text-shadow: 0 0 20px rgba(139, 92, 246, 0.8), 0 0 30px rgba(139, 92, 246, 0.6);
+          }
+        }
+
         .page-header p {
           color: var(--color-text-secondary, #8F90A6);
           font-size: 1.125rem;
           font-family: var(--font-mono, 'Space Mono', monospace);
+        }
+
+        .section-header {
+          display: flex;
+          align-items: center;
+          gap: 0.75rem;
+          font-size: 1.35rem;
+          margin-bottom: 1.25rem;
+          color: #e2e8f0;
+        }
+
+        .section-number {
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          width: 28px;
+          height: 28px;
+          background: linear-gradient(135deg, #8b5cf6 0%, #6366f1 100%);
+          color: white;
+          border-radius: 50%;
+          font-weight: 600;
+          font-size: 0.9rem;
+        }
+
+        .section-count {
+          color: #94a3b8;
+          font-size: 1rem;
+          font-weight: 600;
+          margin-left: 6px;
         }
 
         .my-agents-section {

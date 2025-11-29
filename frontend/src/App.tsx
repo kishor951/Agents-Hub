@@ -168,7 +168,7 @@ function AppContent() {
         </main>
 
         <footer className="app-footer">
-          <p>Hackathon MVP • Cardano Testnet • 95% Owner / 5% Platform Split</p>
+          <p>Agents Hub • Hackathon MVP • Built with Cardano Network</p>
         </footer>
       </div>
     )
