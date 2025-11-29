@@ -12,11 +12,13 @@
   "dependencies": {
     "@cardano-foundation/cardano-connect-with-wallet": "^0.2.5",
     "@emurgo/cardano-serialization-lib-browser": "^11.5.0",
+    "@independenceee/cip68generator": "^1.0.2",
     "@meshsdk/core": "^1.9.0-beta.87",
     "@meshsdk/react": "^1.9.0-beta.87",
     "@types/node": "^24.10.1",
     "axios": "^1.6.2",
     "lucid-cardano": "^0.10.7",
+    "process": "^0.11.10",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
     "react-router-dom": "^7.9.6"
@@ -33,9 +35,10 @@
     "eslint-plugin-react-hooks": "^4.6.0",
     "eslint-plugin-react-refresh": "^0.4.5",
     "events": "^3.3.0",
-    "process": "^0.11.10",
     "typescript": "^5.2.2",
     "util": "^0.12.5",
-    "vite": "^5.0.8"
+    "vite": "^5.0.8",
+    "vite-plugin-node-polyfills": "^0.24.0",
+    "vite-plugin-wasm": "^3.5.0"
   }
 }

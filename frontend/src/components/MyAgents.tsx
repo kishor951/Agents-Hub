@@ -1,41 +1,108 @@
 import { useState, useEffect } from 'react'
+import { useWallet } from '@meshsdk/react'
 import { Agent } from '../types'
+import { getUserAgents } from '../utils/walletAgents'
+import { fetchAgent } from '../utils/api'
 
 interface MyAgentsProps {
   walletAddress: string | null
 }
 
 const MyAgents = ({ walletAddress }: MyAgentsProps) => {
+  const { wallet, connected } = useWallet()
   const [agents, setAgents] = useState<Agent[]>([])
   const [selectedAgents, setSelectedAgents] = useState<Set<string>>(new Set())
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
-  // Fetch agents from backend
+  // Fetch agents from wallet (blockchain discovery)
   useEffect(() => {
     const fetchAgents = async () => {
-      if (!walletAddress) {
+      if (!walletAddress || !connected || !wallet) {
+        console.log('⏳ [MyAgents] Waiting for wallet connection...')
         setLoading(false)
+        setAgents([])
         return
       }
 
       try {
-        const response = await fetch(`/api/agents?owner=${walletAddress}`)
-        if (!response.ok) {
-          throw new Error('Failed to fetch agents')
+        setLoading(true)
+        setError(null)
+        console.log('🔍 [MyAgents] Discovering agents from wallet...')
+        
+        // Step 1: Discover agents from wallet UTXOs
+        const walletAgents = await getUserAgents(wallet)
+        console.log(`✅ [MyAgents] Found ${walletAgents.length} agent assets in wallet`)
+        
+        if (walletAgents.length === 0) {
+          setAgents([])
+          setLoading(false)
+          return
         }
-        const data = await response.json()
-        setAgents(data.agents || [])
-      } catch (err) {
-        console.error('Error fetching agents:', err)
-        setError('Failed to load agents')
+        
+        // Step 2: Fetch full metadata for each agent
+        console.log(`📡 [MyAgents] Fetching metadata for ${walletAgents.length} agents...`)
+        
+        const agentPromises = walletAgents.map(async (walletAgent) => {
+          try {
+            const agentData = await fetchAgent(walletAgent.assetId)
+            
+            // Map snake_case response to Agent interface (camelCase)
+            const agent: Agent = {
+              id: agentData.asset_id,
+              tokenId: agentData.asset_id,
+              name: agentData.name || walletAgent.assetName || 'Unnamed Agent',
+              purpose: agentData.purpose,  // From genetic data
+              instructions: agentData.instructions,  // From genetic data
+              personality: agentData.personality,  // From genetic data
+              skills: agentData.skills || [],  // From genetic data
+              llmModel: agentData.llm_model,  // From genetic data
+              generation: agentData.generation || 0,
+              xp: agentData.xp || 0,
+              owner: walletAddress,
+              ownerAddress: walletAddress,
+              geneticHash: agentData.genetic_hash || agentData.brain_cid?.replace('genetic://', '').replace('ipfs://', ''),
+              ipfsCid: agentData.brain_cid?.replace('ipfs://', '').replace('genetic://', ''),
+              masumiDid: agentData.masumi_did,
+              minted: true,
+              txHash: agentData.mint_tx_hash,
+              parents: agentData.parents as [string, string] | undefined,
+              createdAt: agentData.mint_tx_hash ? 'On-chain' : undefined
+            }
+            
+            return agent
+          } catch (error: any) {
+            console.error(`❌ [MyAgents] Failed to fetch agent ${walletAgent.assetId}:`, error)
+            // Return a minimal agent object for failed fetches
+            return {
+              id: walletAgent.assetId,
+              tokenId: walletAgent.assetId,
+              name: walletAgent.assetName || 'Unknown Agent',
+              generation: 0,
+              xp: 0,
+              owner: walletAddress,
+              ownerAddress: walletAddress,
+              skills: [],
+              minted: true
+            } as Agent
+          }
+        })
+        
+        const fetchedAgents = await Promise.all(agentPromises)
+        const validAgents = fetchedAgents.filter(a => a !== null) as Agent[]
+        
+        console.log(`✅ [MyAgents] Loaded ${validAgents.length} agents`)
+        setAgents(validAgents)
+      } catch (err: any) {
+        console.error('❌ [MyAgents] Error fetching agents:', err)
+        setError('Failed to load agents from wallet')
       } finally {
         setLoading(false)
       }
     }
 
     fetchAgents()
-  }, [walletAddress])
+  }, [wallet, connected, walletAddress])
 
   const handleSelectAgent = (agentId: string) => {
     const newSelected = new Set(selectedAgents)
@@ -58,56 +125,14 @@ const MyAgents = ({ walletAddress }: MyAgentsProps) => {
   const handleDeleteSelected = async () => {
     if (selectedAgents.size === 0) return
 
-    if (!confirm(`Delete ${selectedAgents.size} agent(s)? This action cannot be undone.`)) {
-      return
-    }
-
-    try {
-      // Delete each selected agent
-      const deletePromises = Array.from(selectedAgents).map(agentId =>
-        fetch(`/api/agents/${agentId}`, {
-          method: 'DELETE',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ owner: walletAddress })
-        })
-      )
-
-      await Promise.all(deletePromises)
-
-      // Remove from local state
-      setAgents(prev => prev.filter(a => !selectedAgents.has(a.id)))
-      setSelectedAgents(new Set())
-    } catch (err) {
-      alert('Failed to delete agents')
-    }
+    // Note: Agents are on-chain NFTs, cannot be deleted
+    // This would require burning the NFT, which is not implemented
+    alert('Agents are on-chain NFTs and cannot be deleted. They are permanently stored on the Cardano blockchain.')
   }
 
   const handleDeleteAgent = async (agentId: string) => {
-    if (!confirm('Delete this agent? This action cannot be undone.')) {
-      return
-    }
-
-    try {
-      const response = await fetch(`/api/agents/${agentId}`, {
-        method: 'DELETE',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ owner: walletAddress })
-      })
-
-      if (!response.ok) {
-        throw new Error('Failed to delete agent')
-      }
-
-      // Remove from local state
-      setAgents(prev => prev.filter(a => a.id !== agentId))
-      setSelectedAgents(prev => {
-        const newSet = new Set(prev)
-        newSet.delete(agentId)
-        return newSet
-      })
-    } catch (err) {
-      alert('Failed to delete agent')
-    }
+    // Note: Agents are on-chain NFTs, cannot be deleted
+    alert('Agents are on-chain NFTs and cannot be deleted. They are permanently stored on the Cardano blockchain.')
   }
 
   if (loading) {

@@ -26,7 +26,7 @@ const SelectionToast = ({ selectedAgents, onViewComparison, onClear, onRemoveAge
                   {agent.imageUrl && agent.imageUrl.startsWith('http') ? (
                     <img src={agent.imageUrl} alt={agent.name} className="agent-toast-img" />
                   ) : (
-                    agent.imageUrl || '🤖'
+                    agent.imageUrl || 'AI'
                   )}
                 </span>
                 <span className="agent-name">{agent.name}</span>
@@ -35,7 +35,7 @@ const SelectionToast = ({ selectedAgents, onViewComparison, onClear, onRemoveAge
                   onClick={() => onRemoveAgent(agent.id)}
                   title="Remove from selection"
                 >
-                  ✕
+                  ×
                 </button>
               </div>
             ))}
@@ -44,12 +44,12 @@ const SelectionToast = ({ selectedAgents, onViewComparison, onClear, onRemoveAge
           <div className="toast-actions">
             {selectedAgents.length === 2 && (
               <button className="btn-compare" onClick={onViewComparison}>
-                📊 Compare & Breed
+                Compare & Breed
               </button>
             )}
             {selectedAgents.length < 2 && (
               <button className="btn-compare disabled" disabled>
-                📊 Select 2 Agents
+                Select 2 Agents
               </button>
             )}
             <button className="btn-clear" onClick={onClear}>

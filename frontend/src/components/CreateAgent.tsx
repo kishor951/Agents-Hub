@@ -1,7 +1,10 @@
 import { useState, useEffect } from 'react'
+import { useWallet } from '@meshsdk/react'
 import { Agent } from '../types'
 import AgentCreationProgress from './AgentCreationProgress'
 import axios from 'axios'
+import { mintGenesisAgent } from '../utils/mintAgent'
+import { createAgentMetadata } from '../utils/agentMetadata'
 
 interface CreateAgentProps {
   walletAddress: string
@@ -18,6 +21,9 @@ interface MintTransaction {
 }
 
 const CreateAgent = ({ walletAddress, onAgentCreated }: CreateAgentProps) => {
+  // Use Mesh SDK's useWallet hook (like Reference project)
+  const { wallet, connected } = useWallet()
+  
   const [isCreating, setIsCreating] = useState(false)
   const [showProgress, setShowProgress] = useState(false)
   const [progressStep, setProgressStep] = useState<ProgressStep>('validating')
@@ -163,81 +169,116 @@ const CreateAgent = ({ walletAddress, onAgentCreated }: CreateAgentProps) => {
         formDataToSend.append('picture', formData.picture)
       }
 
-      const response = await axios.post('http://localhost:5000/api/agents/create', formDataToSend, {
+      // API URL - Python backend on port 8000
+      const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000'
+      
+      const response = await axios.post(`${API_URL}/api/agents/create`, formDataToSend, {
         headers: {
           'Content-Type': 'multipart/form-data'
         }
       })
 
+      // Response format: { genetic_hash, masumi_did, image_ipfs_cid }
+      // Note: No ipfs_hash or personality_text - genetic data is enough
+      console.log('📦 Backend response:', response.data)
+
       // Step 3: Saving
       setProgressStep('saving')
       await new Promise(resolve => setTimeout(resolve, 800))
 
-      // Step 4: Minting (building NFT transaction)
+      // Step 4: Building CIP-68 transaction (frontend)
       setProgressStep('minting')
-      await new Promise(resolve => setTimeout(resolve, 800))
+      
+      try {
+        // Use wallet from useWallet hook (like Reference project)
+        if (!connected || !wallet) {
+          console.error('❌ [Wallet] Wallet not connected via useWallet hook')
+          console.error('💡 [Wallet] Please use CardanoWallet component to connect your wallet')
+          throw new Error('Wallet not connected! Please connect your wallet using the wallet button in the navigation bar.')
+        }
 
-      const agent = response.data.agent
-      setCreatedAgent(agent)
+        console.log('✅ [Wallet] Using wallet from useWallet hook (Mesh SDK)')
+        console.log('🔍 [Wallet] Wallet connected:', connected)
+        console.log('🔍 [Wallet] Wallet object:', wallet ? '✅ Present' : '❌ Missing')
 
-      console.log('📦 Agent created:', createdAgent)
-      console.log('💳 Mint TX data:', response.data.mintTx)
+        // Create CIP-68 metadata
+        // Use genetic_data_ipfs_cid for brain_cid (so genetic data can be retrieved later)
+        const metadata = createAgentMetadata(
+          formData.name,
+          response.data.genetic_hash,  // Genetic hash for verification
+          response.data.masumi_did || '',  // Masumi DID (always generated)
+          {
+            generation: 0,
+            xp: 0,
+            breedCount: 0,
+            geneticHash: response.data.genetic_hash,  // Genetic hash for verification
+            geneticDataIpfsCid: response.data.genetic_data_ipfs_cid,  // IPFS CID for retrieving full genetic data
+            imageIpfsCid: response.data.image_ipfs_cid  // Add image if provided
+          }
+        )
 
-      if (response.data.mintTx) {
-        console.log('🎁 Mint transaction ready:', response.data.mintTx.txHash)
-        setPendingMintTx(response.data.mintTx)
+        console.log('📝 Building CIP-68 transaction...')
         
-        // Step 5: Complete
-        setProgressStep('complete')
+        // Build, sign, and submit CIP-68 transaction (matching Reference implementation)
+        const txHash = await mintGenesisAgent(wallet, metadata)
         
-        // Close progress modal after a short delay to show the mint modal
-        setTimeout(() => {
-          setShowProgress(false)
-        }, 1000)
-        
-        // DON'T reset form or reload agents yet - wait for minting
-      } else if (response.data.mintError) {
-        // Minting failed - show error but agent was still created
-        console.error('⚠️ Mint transaction failed:', response.data.mintError)
-        
-        setProgressStep('error')
-        
-        // Check if it's a funding issue
-        if (response.data.mintError.includes('No UTXOs') || response.data.mintError.includes('no funds')) {
-          setErrorMessage(
-            '⚠️ Agent created but minting failed: Your wallet has no testnet ADA.\n\n' +
-            '🎯 Get free testnet ADA from:\nhttps://docs.cardano.org/cardano-testnets/tools/faucet/\n\n' +
-            'Your agent is saved and you can mint it later once you have funds!'
-          )
-        } else {
-          setErrorMessage(`Agent created but minting failed: ${response.data.mintError}`)
+        console.log('✅ Transaction submitted successfully!', txHash)
+
+        // Store agent data with transaction hash
+        const newAgent: Agent = {
+          id: Date.now().toString(),
+          tokenId: `agent_${walletAddress.substring(0, 8)}_${Date.now()}`,
+          name: formData.name,
+          purpose: formData.purpose,
+          instructions: formData.instructions,
+          personality: formData.personality || '',  // Use form data (not from backend)
+          skills: formData.skills.split(',').map(s => s.trim()).filter(s => s),
+          llmModel: formData.llmModel,
+          generation: 0,  // Genesis agent is generation 0
+          owner: walletAddress,
+          ipfsCid: '',  // No IPFS upload
+          imageUrl: response.data.image_ipfs_cid ? `ipfs://${response.data.image_ipfs_cid}` : undefined,
+          geneticHash: response.data.genetic_hash,
+          createdAt: new Date().toISOString(),
+          minted: true,  // Transaction submitted
+          txHash: txHash
         }
         
-        // Still reload agents - agent was created successfully
-        setTimeout(() => {
-          onAgentCreated(agent)
-        }, 5000) // Give user time to read the error
-      } else {
-        console.log('⚠️ No mint transaction returned from backend')
+        setCreatedAgent(newAgent)
         
         // Step 5: Complete
         setProgressStep('complete')
-
-        // Reset form
-        setFormData({
-          name: '',
-          purpose: '',
-          instructions: '',
-          personality: '',
-          skills: '',
-          llmModel: 'x-ai/grok-4.1-fast:free',
-          picture: null
-        })
-
-        // Reload agents after creation
+        
+        // Show success message
+        alert(
+          `✅ Agent Created Successfully!\n\n` +
+          `Transaction: ${txHash}\n\n` +
+          `Check CardanoScan: https://preprod.cardanoscan.io/transaction/${txHash}\n\n` +
+          `Note: Transaction may take 30-60 seconds to appear on CardanoScan.`
+        )
+        
+        // Close progress modal after a short delay
         setTimeout(() => {
-          onAgentCreated(agent)
-        }, 1500)
+          setShowProgress(false)
+          // Trigger wallet refresh to fetch new agent (agents are fetched from wallet)
+          // Pass the agent for immediate UI update, but wallet will be refreshed
+          if (onAgentCreated) {
+            onAgentCreated(newAgent)
+          }
+        }, 2000)
+        
+      } catch (error: any) {
+        console.error('❌ Transaction building failed:', error)
+        setProgressStep('error')
+        
+        // Show error, allow retry
+        if (error.message?.includes('No Cardano wallet')) {
+          setErrorMessage('No Cardano wallet found! Please install Lace wallet from https://www.lace.io/')
+        } else if (error.message?.includes('insufficient')) {
+          setErrorMessage('Insufficient funds! You need testnet ADA.\n\nGet free ADA from: https://docs.cardano.org/cardano-testnets/tools/faucet/')
+        } else {
+          setErrorMessage(`Failed to build transaction: ${error.message || 'Unknown error'}\n\nYou can try again by clicking "Create Agent" again.`)
+        }
       }
 
     } catch (error: any) {
@@ -325,59 +366,59 @@ const CreateAgent = ({ walletAddress, onAgentCreated }: CreateAgentProps) => {
 
                     console.log(`✅ Connected to ${walletName} wallet`)
 
-                    // Sign the transaction (CIP-30: partial=true returns witness set)
+                    // Sign the transaction
                     console.log('📝 Signing transaction with wallet...')
                     console.log('   Unsigned TX length:', pendingMintTx.unsignedTx.length)
-                    console.log('   Unsigned TX (first 100 chars):', pendingMintTx.unsignedTx.substring(0, 100))
                     
-                    // partial=true returns witness set that backend will combine
-                    const witnessSet = await walletApi.signTx(pendingMintTx.unsignedTx, true)
+                    // Sign transaction (returns signed transaction)
+                    const signedTx = await walletApi.signTx(pendingMintTx.unsignedTx, true)
                     console.log('✅ Transaction signed by wallet!')
-                    console.log('   Witness set length:', witnessSet.length)
-                    console.log('   Witness set (first 100 chars):', witnessSet.substring(0, 100))
 
-                    // Submit to blockchain via backend
-                    console.log('📤 Submitting to blockchain...')
-                    const response = await axios.post('http://localhost:5000/api/submit-tx', {
-                      unsignedTx: pendingMintTx.unsignedTx,
-                      witnessSet: witnessSet
-                    })
-
-                    console.log('✅ Transaction submitted!', response.data)
+                    // Submit directly to Cardano network (no backend needed)
+                    console.log('📤 Submitting to Cardano network...')
+                    const txHash = await walletApi.submitTx(signedTx)
                     
-                    // Update agent status in backend
-                    if (createdAgent?.id) {
-                      try {
-                        await axios.post(`http://localhost:5000/api/agents/${createdAgent.id}/mint-complete`, {
-                          txHash: response.data.txHash
-                        })
-                        console.log('✅ Agent marked as minted in backend')
-                      } catch (updateError) {
-                        console.error('⚠️ Failed to update agent mint status:', updateError)
-                        // Continue anyway - transaction succeeded
-                      }
-                    }
+                    console.log('✅ Transaction submitted!', txHash)
                     
                     alert(
-                      `🎉 NFT Minting Started!\n\n` +
-                      `Transaction: ${response.data.txHash}\n` +
-                      `Network: ${response.data.network || 'preprod'}\n\n` +
-                      `Your NFT will appear in your ${walletName} wallet in 2-3 minutes.\n\n` +
-                      `Check CardanoScan: https://preprod.cardanoscan.io/transaction/${response.data.txHash}`
+                      `🎉 NFT Minted!\n\n` +
+                      `Transaction: ${txHash}\n` +
+                      `Network: preprod\n\n` +
+                      `Your agent will appear in your ${walletName} wallet in 2-3 minutes.\n\n` +
+                      `Check CardanoScan: https://preprod.cardanoscan.io/transaction/${txHash}`
                     )
 
                     // Update local state
                     if (createdAgent) {
                       createdAgent.minted = true
-                      createdAgent.txHash = response.data.txHash
+                      createdAgent.txHash = txHash
                     }
 
                     setPendingMintTx(null)
                     setCreatedAgent(null)
                     
-                    // Reload agents to show updated status
+                    // Reset form
+                    setFormData({
+                      name: '',
+                      purpose: '',
+                      instructions: '',
+                      personality: '',
+                      skills: '',
+                      llmModel: 'x-ai/grok-4.1-fast:free',
+                      picture: null
+                    })
+                    
+                    // Reload agents from wallet (not backend - agents are on-chain)
+                    // Agent is now minted on-chain, frontend will fetch from wallet
                     setTimeout(() => {
-                      onAgentCreated(createdAgent)
+                      // Trigger refresh - agent will be fetched from wallet
+                      // Create a minimal agent object for the callback
+                      const mintedAgent: Agent = {
+                        ...createdAgent!,
+                        minted: true,
+                        txHash: txHash
+                      }
+                      onAgentCreated(mintedAgent)
                     }, 3000)
                   } catch (error: any) {
                     console.error('❌ Wallet signing failed:', error)

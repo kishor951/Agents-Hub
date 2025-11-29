@@ -1,11 +1,13 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { useWallet } from '@meshsdk/react'
 import { Agent } from '../types'
 import AgentCard from './AgentCard'
 import SelectionToast from './SelectionToast'
 import ComparisonScreen from './ComparisonScreen'
 import FusionProgression from './FusionProgression'
-import axios from 'axios'
+import { getUserAgents } from '../utils/walletAgents'
+import { fetchAgent } from '../utils/api'
 
 interface DashboardProps {
   walletAddress: string
@@ -16,6 +18,7 @@ interface DashboardProps {
 
 const Dashboard = ({ walletAddress, onStartBreeding }: DashboardProps) => {
   const navigate = useNavigate()
+  const { wallet, connected } = useWallet()
   const [agents, setAgents] = useState<Agent[]>([])
   const [selectedAgents, setSelectedAgents] = useState<Agent[]>([])
   const [showComparison, setShowComparison] = useState(false)
@@ -24,29 +27,102 @@ const Dashboard = ({ walletAddress, onStartBreeding }: DashboardProps) => {
   const [searchQuery, setSearchQuery] = useState('')
   const [filteredAgents, setFilteredAgents] = useState<Agent[]>([])
   const [rotatingWord, setRotatingWord] = useState('Ideate')
+  const [loading, setLoading] = useState(true)
 
   // Rotating words for the feature text
   const rotatingWords = ['Ideate', 'Innovate', 'Solve', 'Create', 'Discover']
 
   useEffect(() => {
     const loadAgents = async () => {
-      try {
-        // Fetch user-created agents from backend
-        const response = await axios.get(`http://localhost:5000/api/agents?owner=${walletAddress}`)
-        const userAgents = response.data.agents || []
-        
-        console.log(`📋 Loaded ${userAgents.length} agents for dashboard`)
-        setAgents(userAgents)
-        setFilteredAgents(userAgents)
-      } catch (error) {
-        console.error('Failed to load agents:', error)
+      if (!connected || !wallet) {
+        console.log('⏳ [Dashboard] Waiting for wallet connection...')
+        setLoading(false)
         setAgents([])
         setFilteredAgents([])
+        return
+      }
+
+      try {
+        setLoading(true)
+        console.log('🔍 [Dashboard] Discovering agents from wallet...')
+        
+        // Step 1: Discover agents from wallet UTXOs
+        const walletAgents = await getUserAgents(wallet)
+        console.log(`✅ [Dashboard] Found ${walletAgents.length} agent assets in wallet`)
+        
+        if (walletAgents.length === 0) {
+          setAgents([])
+          setFilteredAgents([])
+          setLoading(false)
+          return
+        }
+        
+        // Step 2: Fetch full metadata for each agent (limit to 10 for performance)
+        const agentsToFetch = walletAgents.slice(0, 10)
+        console.log(`📡 [Dashboard] Fetching metadata for ${agentsToFetch.length} agents...`)
+        
+        const agentPromises = agentsToFetch.map(async (walletAgent) => {
+          try {
+            const agentData = await fetchAgent(walletAgent.assetId)
+            
+            // Map snake_case response to Agent interface (camelCase)
+            const agent: Agent = {
+              id: agentData.asset_id,
+              tokenId: agentData.asset_id,
+              name: agentData.name || walletAgent.assetName || 'Unnamed Agent',
+              purpose: agentData.purpose,  // From genetic data
+              instructions: agentData.instructions,  // From genetic data
+              personality: agentData.personality,  // From genetic data
+              skills: agentData.skills || [],  // From genetic data
+              llmModel: agentData.llm_model,  // From genetic data
+              generation: agentData.generation || 0,
+              xp: agentData.xp || 0,
+              owner: walletAddress,
+              ownerAddress: walletAddress,
+              geneticHash: agentData.genetic_hash || agentData.brain_cid?.replace('genetic://', '').replace('ipfs://', ''),
+              ipfsCid: agentData.brain_cid?.replace('ipfs://', '').replace('genetic://', ''),
+              masumiDid: agentData.masumi_did,
+              minted: true,
+              txHash: agentData.mint_tx_hash,
+              parents: agentData.parents as [string, string] | undefined,
+              createdAt: agentData.mint_tx_hash ? 'On-chain' : undefined
+            }
+            
+            return agent
+          } catch (error: any) {
+            console.error(`❌ [Dashboard] Failed to fetch agent ${walletAgent.assetId}:`, error)
+            // Return a minimal agent object for failed fetches
+            return {
+              id: walletAgent.assetId,
+              tokenId: walletAgent.assetId,
+              name: walletAgent.assetName || 'Unknown Agent',
+              generation: 0,
+              xp: 0,
+              owner: walletAddress,
+              ownerAddress: walletAddress,
+              skills: [],
+              minted: true
+            } as Agent
+          }
+        })
+        
+        const fetchedAgents = await Promise.all(agentPromises)
+        const validAgents = fetchedAgents.filter(a => a !== null) as Agent[]
+        
+        console.log(`✅ [Dashboard] Loaded ${validAgents.length} agents for dashboard`)
+        setAgents(validAgents)
+        setFilteredAgents(validAgents)
+      } catch (error: any) {
+        console.error('❌ [Dashboard] Failed to load agents:', error)
+        setAgents([])
+        setFilteredAgents([])
+      } finally {
+        setLoading(false)
       }
     }
 
     loadAgents()
-  }, [walletAddress])
+  }, [wallet, connected, walletAddress])
 
   // Filter agents based on search query
   useEffect(() => {
@@ -184,7 +260,13 @@ const Dashboard = ({ walletAddress, onStartBreeding }: DashboardProps) => {
         </div>
       )}
 
-      {agents.length === 0 ? (
+      {loading ? (
+        <div className="empty-state">
+          <div className="empty-icon">⏳</div>
+          <h3>Loading Agents...</h3>
+          <p>Discovering your agents from the blockchain...</p>
+        </div>
+      ) : agents.length === 0 ? (
         <div className="empty-state">
           <div className="empty-icon">🤖</div>
           <h3>No Agents Yet</h3>

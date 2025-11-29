@@ -1,6 +1,8 @@
 import { useState } from 'react'
 import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from 'react-router-dom'
 import * as React from 'react'
+import { MeshProvider } from '@meshsdk/react'
+import '@meshsdk/react/styles.css'
 import './App.css'
 import NavigationBar from './components/NavigationBar'
 import Dashboard from './components/Dashboard'
@@ -176,9 +178,11 @@ function AppContent() {
 
 function App() {
   return (
-    <Router>
-      <AppContent />
-    </Router>
+    <MeshProvider>
+      <Router>
+        <AppContent />
+      </Router>
+    </MeshProvider>
   )
 }
 

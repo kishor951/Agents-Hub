@@ -115,14 +115,14 @@ const AgentEditor = ({ agent, isOpen, onClose, onSave }: AgentEditorProps) => {
       <div className="agent-editor-modal" onClick={e => e.stopPropagation()}>
         {/* Header */}
         <div className="editor-header">
-          <h2>✏️ Edit Agent</h2>
-          <button className="close-btn" onClick={onClose}>✕</button>
+          <h2>Edit Agent</h2>
+          <button className="close-btn" onClick={onClose}>×</button>
         </div>
 
         {/* Error Message */}
         {error && (
           <div className="error-banner">
-            <span>⚠️ {error}</span>
+            <span>Warning: {error}</span>
           </div>
         )}
 
@@ -231,7 +231,7 @@ const AgentEditor = ({ agent, isOpen, onClose, onSave }: AgentEditorProps) => {
                     onClick={() => handleRemoveSkill(skill)}
                     type="button"
                   >
-                    ✕
+                    ×
                   </button>
                 </div>
               ))}
@@ -254,7 +254,7 @@ const AgentEditor = ({ agent, isOpen, onClose, onSave }: AgentEditorProps) => {
             onClick={handleSave}
             disabled={isSaving || !hasChanges}
           >
-            {isSaving ? '💾 Saving...' : '✓ Save Changes'}
+            {isSaving ? 'Saving...' : 'Save Changes'}
           </button>
         </div>
       </div>

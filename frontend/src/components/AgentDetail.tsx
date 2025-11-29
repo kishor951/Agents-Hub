@@ -1,34 +1,70 @@
 import { useState, useRef, useEffect } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
+import { useWallet } from '@meshsdk/react'
 import { Agent } from '../types'
 import AgentEditor from './AgentEditor'
-import axios from 'axios'
+import { 
+  fetchAgent, 
+  checkBackendHealth,
+  sendChatMessage,
+  getChatSessions,
+  getChatHistory,
+  createChatSession,
+  type ChatMessage,
+  type ConversationSession
+} from '../utils/api'
 
 interface AgentDetailProps {
   agent?: Agent
 }
 
-interface ChatMessage {
-  id: string
-  role: 'user' | 'assistant'
-  content: string
-  timestamp: Date
-}
-
 const AgentDetail = ({ agent: initialAgent }: AgentDetailProps) => {
   const navigate = useNavigate()
   const { id } = useParams<{ id: string }>()
+  const { wallet, connected } = useWallet()
+  
   const [agent, setAgent] = useState<Agent | null>(initialAgent || null)
   const [loading, setLoading] = useState(!initialAgent)
   const [error, setError] = useState<string | null>(null)
+  
+  // Chat state
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [inputValue, setInputValue] = useState('')
   const [isLoading, setIsLoading] = useState(false)
+  const messagesEndRef = useRef<HTMLDivElement>(null)
+  const messagesContainerRef = useRef<HTMLDivElement>(null)
+  
+  // Session management
+  const [sessionId, setSessionId] = useState<string | null>(null)
+  const [sessions, setSessions] = useState<ConversationSession[]>([])
+  const [backendStatus, setBackendStatus] = useState<"checking" | "online" | "offline">("checking")
+  
+  // Pagination
+  const [messageOffset, setMessageOffset] = useState(0)
+  const [hasMoreMessages, setHasMoreMessages] = useState(false)
+  const [isLoadingMore, setIsLoadingMore] = useState(false)
+  
+  // Agent editing
   const [editingModel, setEditingModel] = useState(false)
   const [selectedModel, setSelectedModel] = useState('')
   const [isSavingModel, setIsSavingModel] = useState(false)
   const [isEditorOpen, setIsEditorOpen] = useState(false)
-  const messagesEndRef = useRef<HTMLDivElement>(null)
+
+  // Generation color function
+  const getGenerationColor = (generation: number) => {
+    switch (generation) {
+      case 1:
+        return { hex: '#FF6B35', rgb: '255, 107, 53' }; // Orange
+      case 2:
+        return { hex: '#4ECDC4', rgb: '78, 205, 196' }; // Teal
+      case 3:
+        return { hex: '#45B7D1', rgb: '69, 183, 209' }; // Blue
+      case 4:
+        return { hex: '#96CEB4', rgb: '150, 206, 180' }; // Green
+      default:
+        return { hex: '#FECA57', rgb: '254, 202, 87' }; // Yellow for generation 5+
+    }
+  }
 
 
   // Available LLM models
@@ -48,15 +84,45 @@ const AgentDetail = ({ agent: initialAgent }: AgentDetailProps) => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages])
 
+  // Check backend health
+  useEffect(() => {
+    const checkHealth = async () => {
+      const isHealthy = await checkBackendHealth()
+      setBackendStatus(isHealthy ? "online" : "offline")
+    }
+    checkHealth()
+  }, [])
+
   // Fetch agent data if not provided as prop
   useEffect(() => {
     if (!initialAgent && id) {
-      const fetchAgent = async () => {
+      const loadAgent = async () => {
         try {
           setLoading(true)
-          const response = await axios.get(`http://localhost:5000/api/agents/${id}`)
-          setAgent(response.data)
-          setSelectedModel(response.data.llmModel || '')
+          const agentData = await fetchAgent(id)
+          
+          // Map API response to Agent interface
+          const mappedAgent: Agent = {
+            id: agentData.asset_id,
+            tokenId: agentData.asset_id,
+            name: agentData.name || 'Unnamed Agent',
+            purpose: agentData.purpose,
+            instructions: agentData.instructions,
+            personality: agentData.personality,
+            skills: agentData.skills || [],
+            llmModel: agentData.llm_model,
+            generation: agentData.generation || 0,
+            xp: agentData.xp || 0,
+            owner: '', // Will be set from wallet if needed
+            ipfsCid: agentData.brain_cid?.replace('ipfs://', ''),
+            geneticHash: agentData.genetic_hash,
+            masumiDid: agentData.masumi_did,
+            minted: true,
+            txHash: agentData.mint_tx_hash
+          }
+          
+          setAgent(mappedAgent)
+          setSelectedModel(mappedAgent.llmModel || '')
         } catch (err: any) {
           console.error('Failed to fetch agent:', err)
           setError('Agent not found')
@@ -64,44 +130,148 @@ const AgentDetail = ({ agent: initialAgent }: AgentDetailProps) => {
           setLoading(false)
         }
       }
-      fetchAgent()
+      loadAgent()
     } else if (initialAgent) {
       setSelectedModel(initialAgent.llmModel || '')
     }
   }, [id, initialAgent])
 
+  // Load sessions and auto-create session when agent is loaded
+  useEffect(() => {
+    if (!agent || !agent.id || backendStatus !== "online") return
+
+    const loadSessionsAndCreate = async () => {
+      try {
+        // Get user address from wallet
+        const userAddress = connected && wallet 
+          ? await wallet.getChangeAddress().catch(() => undefined) 
+          : undefined
+
+        // Load existing sessions
+        const sessionList = await getChatSessions(agent.id, userAddress)
+        setSessions(sessionList)
+
+        // Auto-create session if none exists, or use most recent
+        if (sessionList.length === 0) {
+          console.log('📝 [Chat] No existing sessions, creating new session...')
+          const newSession = await createChatSession(agent.id, userAddress)
+          setSessionId(newSession.session_id)
+        } else {
+          // Use most recent session
+          const mostRecent = sessionList.sort((a, b) => 
+            new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime()
+          )[0]
+          setSessionId(mostRecent.session_id)
+          console.log('📝 [Chat] Using existing session:', mostRecent.session_id)
+        }
+      } catch (err: any) {
+        console.error('❌ [Chat] Failed to load sessions:', err)
+      }
+    }
+
+    loadSessionsAndCreate()
+  }, [agent, backendStatus, connected, wallet])
+
+  // Load chat history when session is selected
+  useEffect(() => {
+    if (!sessionId || backendStatus !== "online") return
+
+    const loadHistory = async () => {
+      try {
+        setMessageOffset(0)
+        const history = await getChatHistory(sessionId, 10, 0)
+        setMessages(history.messages)
+        setHasMoreMessages(history.has_more)
+        console.log(`✅ [Chat] Loaded ${history.messages.length} messages (${history.total} total)`)
+      } catch (err: any) {
+        console.error('❌ [Chat] Failed to load history:', err)
+      }
+    }
+
+    loadHistory()
+  }, [sessionId, backendStatus])
+
+  // Handle scroll to load more messages
+  useEffect(() => {
+    const container = messagesContainerRef.current
+    if (!container || !hasMoreMessages || isLoadingMore) return
+
+    const handleScroll = () => {
+      if (container.scrollTop === 0 && hasMoreMessages) {
+        loadMoreMessages()
+      }
+    }
+
+    container.addEventListener('scroll', handleScroll)
+    return () => container.removeEventListener('scroll', handleScroll)
+  }, [hasMoreMessages, isLoadingMore])
+
+  const loadMoreMessages = async () => {
+    if (!sessionId || isLoadingMore || !hasMoreMessages) return
+
+    try {
+      setIsLoadingMore(true)
+      const nextOffset = messageOffset + 10
+      const history = await getChatHistory(sessionId, 10, nextOffset)
+      
+      // Prepend older messages (they come in chronological order)
+      setMessages(prev => [...history.messages, ...prev])
+      setMessageOffset(nextOffset)
+      setHasMoreMessages(history.has_more)
+      console.log(`✅ [Chat] Loaded more messages. Total: ${history.messages.length + messages.length}`)
+    } catch (err: any) {
+      console.error('❌ [Chat] Failed to load more messages:', err)
+    } finally {
+      setIsLoadingMore(false)
+    }
+  }
+
+  const handleSelectSession = async (selectedSessionId: string) => {
+    setSessionId(selectedSessionId)
+    setMessageOffset(0)
+  }
+
+  const handleNewSession = async () => {
+    if (!agent || !agent.id) return
+
+    try {
+      const userAddress = connected && wallet 
+        ? await wallet.getChangeAddress().catch(() => undefined) 
+        : undefined
+
+      const newSession = await createChatSession(agent.id, userAddress)
+      setSessionId(newSession.session_id)
+      setMessages([])
+      setMessageOffset(0)
+      setHasMoreMessages(false)
+      
+      // Reload sessions list
+      const sessionList = await getChatSessions(agent.id, userAddress)
+      setSessions(sessionList)
+    } catch (err: any) {
+      console.error('❌ [Chat] Failed to create new session:', err)
+      setError('Failed to create new session')
+    }
+  }
+
   const handleSaveModel = async () => {
     if (!agent) return
     
-    console.log('🔧 [DEBUG] handleSaveModel called')
-    console.log('🔧 [DEBUG] selectedModel:', selectedModel)
-    console.log('🔧 [DEBUG] agent.llmModel:', agent.llmModel)
-    console.log('🔧 [DEBUG] agent.id:', agent.id)
-    
     if (selectedModel === agent.llmModel) {
-      console.log('🔧 [DEBUG] Model unchanged, closing edit mode')
       setEditingModel(false)
       return
     }
 
     setIsSavingModel(true)
     try {
-      const updateUrl = `http://localhost:5000/api/agents/${agent.id}`
-      console.log('🔧 [DEBUG] Sending PUT request to:', updateUrl)
-      console.log('🔧 [DEBUG] Payload:', { llmModel: selectedModel })
-      
-      const response = await axios.put(updateUrl, {
-        llmModel: selectedModel
-      })
-      
-      console.log('🔧 [DEBUG] Response received:', response.data)
-      setAgent(prev => prev ? { ...prev, llmModel: selectedModel } : null)
+      // Note: LLM model update endpoint not yet implemented in new backend
+      // This is a placeholder for future implementation
+      console.log('⚠️  [Model] LLM model update not yet implemented in new backend')
+      alert('LLM model update feature is not yet available. This will be implemented in a future update.')
+      setSelectedModel(agent.llmModel || '')
       setEditingModel(false)
-      console.log('✅ Agent LLM model updated successfully to:', selectedModel)
     } catch (error: any) {
       console.error('❌ Failed to update model:', error)
-      console.log('🔧 [DEBUG] Error response:', error.response?.data)
-      console.log('🔧 [DEBUG] Error status:', error.response?.status)
       alert('Failed to update LLM model. Please try again.')
       setSelectedModel(agent.llmModel || '')
     } finally {
@@ -110,66 +280,94 @@ const AgentDetail = ({ agent: initialAgent }: AgentDetailProps) => {
   }
 
   const handleSendMessage = async () => {
-    if (!agent) return
-    
-    if (!inputValue.trim()) return
+    if (!agent || !agent.id || !inputValue.trim() || isLoading || backendStatus !== "online") return
 
-    console.log('💬 [DEBUG] Sending message...')
-    console.log('💬 [DEBUG] Agent:', { id: agent.id, name: agent.name, llmModel: agent.llmModel })
-    console.log('💬 [DEBUG] Query:', inputValue)
-
-    const userMessage: ChatMessage = {
-      id: Date.now().toString(),
-      role: 'user',
-      content: inputValue,
-      timestamp: new Date(),
-    }
-
-    // Add user message to chat
-    setMessages(prev => [...prev, userMessage])
+    const userMessageText = inputValue.trim()
     setInputValue('')
     setIsLoading(true)
+    setError(null)
+
+    // Add user message to UI immediately (optimistic update)
+    const tempUserMessage: ChatMessage = {
+      message_id: `temp-${Date.now()}`,
+      session_id: sessionId || '',
+      role: 'user',
+      content: userMessageText,
+      timestamp: new Date().toISOString(),
+    }
+    setMessages(prev => [...prev, tempUserMessage])
 
     try {
-      const queryUrl = `http://localhost:5000/api/agent/query`
-      const queryPayload = {
-        tokenId: agent.id,
-        agentName: agent.name,
-        query: inputValue,
-        personaPrompt: agent.personality || agent.purpose || '',
-        skills: agent.skills || [],
-        llmModel: agent.llmModel
-      }
-      
-      console.log('💬 [DEBUG] POST to:', queryUrl)
-      console.log('💬 [DEBUG] Payload:', queryPayload)
-      
-      // Call backend API to get agent response
-      const response = await axios.post(queryUrl, queryPayload)
-      
-      console.log('💬 [DEBUG] Response received:', response.data)
-      
-      const assistantMessage: ChatMessage = {
-        id: (Date.now() + 1).toString(),
-        role: 'assistant',
-        content: response.data.response || 'No response received',
-        timestamp: new Date(),
+      const userAddress = connected && wallet 
+        ? await wallet.getChangeAddress().catch(() => undefined) 
+        : undefined
+
+      // Send message using new chat API
+      const response = await sendChatMessage(
+        agent.id,
+        userMessageText,
+        sessionId || undefined,
+        undefined,
+        userAddress
+      )
+
+      // Update session ID if it was created
+      const finalSessionId = response.session_id
+      if (!sessionId && finalSessionId) {
+        setSessionId(finalSessionId)
       }
 
-      console.log('💬 [DEBUG] Added assistant message:', assistantMessage)
-      setMessages(prev => [...prev, assistantMessage])
-    } catch (error: any) {
-      console.error('❌ Chat error:', error)
-      console.log('💬 [DEBUG] Error response:', error.response?.data)
-      console.log('💬 [DEBUG] Error status:', error.response?.status)
-      console.log('💬 [DEBUG] Error message:', error.message)
-      const errorMessage: ChatMessage = {
-        id: (Date.now() + 2).toString(),
-        role: 'assistant',
-        content: 'Sorry, I encountered an error. Please try again.',
-        timestamp: new Date(),
+      // Reload conversation history to get both user and agent messages from backend
+      // This ensures both messages are displayed correctly
+      try {
+        const history = await getChatHistory(finalSessionId || sessionId || '', 10, 0)
+        setMessages(history.messages)
+        setHasMoreMessages(history.has_more)
+        setMessageOffset(0)
+        console.log(`✅ [Chat] Reloaded conversation history: ${history.messages.length} messages`)
+      } catch (historyErr: any) {
+        console.error('❌ [Chat] Failed to reload history, using response data:', historyErr)
+        // Fallback: Remove temp message and add agent response
+        // But we still need the user message - get it from temp message before filtering
+        setMessages(prev => {
+          const tempUserMsg = prev.find(m => m.message_id.startsWith('temp-'))
+          const filtered = prev.filter(m => !m.message_id.startsWith('temp-'))
+          const newMessages = filtered
+          
+          // Add user message back if we had a temp one
+          if (tempUserMsg) {
+            newMessages.push({
+              ...tempUserMsg,
+              message_id: `user-${Date.now()}`, // Generate a proper ID
+              session_id: finalSessionId || sessionId || ''
+            })
+          }
+          
+          // Add agent response
+          newMessages.push({
+            message_id: response.message_id,
+            session_id: finalSessionId || sessionId || '',
+            role: 'agent',
+            content: response.response,
+            timestamp: response.timestamp,
+            agent_asset_id: response.agent_asset_id,
+          })
+          
+          return newMessages
+        })
       }
-      setMessages(prev => [...prev, errorMessage])
+
+      // Reload sessions to update message count
+      if (agent.id) {
+        const sessionList = await getChatSessions(agent.id, userAddress)
+        setSessions(sessionList)
+      }
+    } catch (error: any) {
+      console.error('❌ [Chat] Error sending message:', error)
+      setError(error.message || 'Failed to send message')
+      
+      // Remove temp message on error
+      setMessages(prev => prev.filter(m => !m.message_id.startsWith('temp-')))
     } finally {
       setIsLoading(false)
     }
@@ -199,19 +397,44 @@ const AgentDetail = ({ agent: initialAgent }: AgentDetailProps) => {
   }
 
   return (
-    <div className="agent-detail-page">
+    <div 
+      className="agent-detail-page"
+      style={{ '--gen-color-rgb': agent ? getGenerationColor(agent.generation).rgb : '139, 92, 246' } as React.CSSProperties}
+    >
       {/* Header */}
       <div className="agent-detail-header">
         <button className="back-button" onClick={() => navigate('/dashboard')}>
           ← Back
         </button>
-        <h1>{agent.name}</h1>
+        <div className="header-content">
+          <div className="header-title">
+            <div className="agent-header-image">
+              {agent.imageUrl && agent.imageUrl.startsWith('http') ? (
+                <img src={agent.imageUrl} alt={agent.name} />
+              ) : (
+                <div className="agent-emoji">{agent.imageUrl || 'AI'}</div>
+              )}
+            </div>
+            <h1>{agent.name}</h1>
+            <div className="generation-badge" style={{ backgroundColor: getGenerationColor(agent.generation).hex }}>
+              <svg className="gen-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2z"/>
+                <path d="M12 6v12"/>
+                <path d="M8 10h8"/>
+                <path d="M8 14h8"/>
+                <path d="M10 8h4"/>
+                <path d="M10 16h4"/>
+              </svg>
+              <span className="gen-text">Gen {agent.generation}</span>
+            </div>
+          </div>
+        </div>
         <button 
           className="edit-agent-btn"
           onClick={() => setIsEditorOpen(true)}
           title="Edit agent properties"
         >
-          ✏️ Edit
+          Edit
         </button>
       </div>
 
@@ -219,47 +442,46 @@ const AgentDetail = ({ agent: initialAgent }: AgentDetailProps) => {
       <div className="agent-banner">
         <div className="agent-banner-bg" />
         <div className="agent-banner-content">
-          <div className="agent-large-image">
-            {agent.imageUrl && agent.imageUrl.startsWith('http') ? (
-              <img src={agent.imageUrl} alt={agent.name} />
-            ) : (
-              <div className="agent-emoji">{agent.imageUrl || '🤖'}</div>
-            )}
-          </div>
           <div className="agent-header-info">
-            <h2>{agent.name}</h2>
             <p className="agent-purpose">{agent.purpose || 'AI Agent'}</p>
-            <div className="agent-meta">
-              <span className="meta-item">
-                <span className="label">Generation:</span>
-                <span className="value">{agent.generation}</span>
-              </span>
-              <span className="meta-item">
-                <span className="label">LLM Model:</span>
-                <span className="value">{agent.llmModel || 'Unknown'}</span>
-              </span>
-            </div>
           </div>
         </div>
       </div>
 
       {/* 3-Section Notebook Layout */}
       <div className="notebook-layout">
-        {/* Section 1: Chat History */}
+        {/* Section 1: Chat History / Sessions */}
         <div className="section chat-history-section">
           <div className="section-header">
-            <h3>💬 Chat History</h3>
+            <h3>Conversations</h3>
+            <button
+              onClick={handleNewSession}
+              className="new-session-btn"
+              title="Start new conversation"
+            >
+              + New
+            </button>
           </div>
           <div className="chat-history-list">
-            {messages.length === 0 ? (
-              <p className="empty-history">No messages yet. Start chatting!</p>
+            {sessions.length === 0 ? (
+              <p className="empty-history">No conversations yet</p>
             ) : (
-              messages.map(msg => (
-                <div key={msg.id} className={`message ${msg.role}`}>
-                  <span className="history-role">{msg.role === 'user' ? '👤' : '🤖'}</span>
-                  <span className="history-text">{msg.content.substring(0, 50)}...</span>
-                </div>
-              ))
+              sessions
+                .sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime())
+                .map(session => (
+                  <button
+                    key={session.session_id}
+                    onClick={() => handleSelectSession(session.session_id)}
+                    className={`session-item ${sessionId === session.session_id ? 'active' : ''}`}
+                  >
+                    <div className="session-date">
+                      {new Date(session.created_at).toLocaleDateString()}
+                    </div>
+                    <div className="session-meta">
+                      {session.message_count} messages
+                    </div>
+                  </button>
+                ))
             )}
           </div>
         </div>
@@ -267,31 +489,41 @@ const AgentDetail = ({ agent: initialAgent }: AgentDetailProps) => {
         {/* Section 2: Chat Interface */}
         <div className="section chat-interface-section">
           <div className="section-header">
-            <h3>💭 Chat with Agent</h3>
+            <h3>Chat with Agent</h3>
           </div>
-          <div className="messages-container">
+          <div 
+            className="messages-container" 
+            ref={messagesContainerRef}
+          >
+            {isLoadingMore && (
+              <div className="load-more-indicator">
+                Loading older messages...
+              </div>
+            )}
             {messages.length === 0 ? (
               <div className="welcome-message">
-                <div className="welcome-emoji">🤖</div>
                 <h4>Start a conversation</h4>
                 <p>Ask {agent.name} anything about their skills and abilities!</p>
+                {backendStatus === "offline" && (
+                  <p className="backend-offline">⚠️ Backend API is offline</p>
+                )}
               </div>
             ) : (
               messages.map(msg => (
-                <div key={msg.id} className={`message ${msg.role}`}>
+                <div key={msg.message_id} className={`message ${msg.role}`}>
                   <div className="message-avatar">
-                    {msg.role === 'user' ? '👤' : (
+                    {msg.role === 'user' ? 'U' : (
                       agent.imageUrl && agent.imageUrl.startsWith('http') ? (
                         <img src={agent.imageUrl} alt="agent" className="message-img" />
                       ) : (
-                        '🤖'
+                        'AI'
                       )
                     )}
                   </div>
                   <div className="message-content">
                     <div className="message-bubble">{msg.content}</div>
                     <span className="message-time">
-                      {msg.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                      {new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                     </span>
                   </div>
                 </div>
@@ -299,7 +531,7 @@ const AgentDetail = ({ agent: initialAgent }: AgentDetailProps) => {
             )}
             {isLoading && (
               <div className="message assistant">
-                <div className="message-avatar">⏳</div>
+                <div className="message-avatar">...</div>
                 <div className="message-content">
                   <div className="message-bubble loading">
                     <span></span><span></span><span></span>
@@ -311,44 +543,52 @@ const AgentDetail = ({ agent: initialAgent }: AgentDetailProps) => {
           </div>
 
           {/* Chat Input */}
-          <div className="chat-input-area">
-            <input
-              type="text"
-              value={inputValue}
-              onChange={(e) => setInputValue(e.target.value)}
-              onKeyPress={(e) => e.key === 'Enter' && !isLoading && handleSendMessage()}
-              placeholder="Ask something..."
-              disabled={isLoading}
-              className="chat-input"
-            />
-            <button
-              onClick={handleSendMessage}
-              disabled={isLoading || !inputValue.trim()}
-              className="send-button"
-            >
-              {isLoading ? '⏳' : '→'}
-            </button>
-          </div>
+          {backendStatus === "online" && (
+            <div className="chat-input-area">
+              <input
+                type="text"
+                value={inputValue}
+                onChange={(e) => setInputValue(e.target.value)}
+                onKeyPress={(e) => e.key === 'Enter' && !isLoading && handleSendMessage()}
+                placeholder="Ask something..."
+                disabled={isLoading || !sessionId}
+                className="chat-input"
+              />
+              <button
+                onClick={handleSendMessage}
+                disabled={isLoading || !inputValue.trim() || !sessionId}
+                className="send-button"
+              >
+                {isLoading ? '...' : (
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M5 12h14M12 5l7 7-7 7"/>
+                  </svg>
+                )}
+              </button>
+            </div>
+          )}
+          {backendStatus === "offline" && (
+            <div className="chat-input-area">
+              <div className="backend-offline-message">
+                ⚠️ Backend API is offline. Chat unavailable.
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Section 3: Agent Description */}
         <div className="section description-section">
           <div className="section-header">
-            <h3>📋 Agent Description</h3>
+            <h3>Agent Description</h3>
           </div>
           <div className="description-content">
             {/* Instructions */}
-            {agent.instructions && (
-              <div className="desc-card">
-                <h4>📋 Instructions</h4>
-                <p>{agent.instructions}</p>
-              </div>
-            )}
+            {/* Removed instructions display */}
 
             {/* Personality */}
             {agent.personality && (
               <div className="desc-card">
-                <h4>🎭 Personality</h4>
+                <h4>Personality</h4>
                 <p>{agent.personality}</p>
               </div>
             )}
@@ -356,7 +596,7 @@ const AgentDetail = ({ agent: initialAgent }: AgentDetailProps) => {
             {/* Skills */}
             {agent.skills && agent.skills.length > 0 && (
               <div className="desc-card">
-                <h4>⚡ Skills</h4>
+                <h4>Skills</h4>
                 <div className="skills-list">
                   {agent.skills.map((skill, idx) => (
                     <span key={idx} className="skill-tag">
@@ -369,7 +609,7 @@ const AgentDetail = ({ agent: initialAgent }: AgentDetailProps) => {
 
             {/* Metadata */}
             <div className="desc-card">
-              <h4>🔗 Metadata</h4>
+              <h4>Metadata</h4>
               <div className="metadata-info">
                 {agent.llmModel && (
                   <div className="meta-row">
@@ -392,7 +632,7 @@ const AgentDetail = ({ agent: initialAgent }: AgentDetailProps) => {
                           onClick={handleSaveModel}
                           disabled={isSavingModel}
                         >
-                          {isSavingModel ? '💾...' : '✓ Save'}
+                          {isSavingModel ? 'Saving...' : 'Save'}
                         </button>
                         <button
                           className="cancel-model-btn"
@@ -402,7 +642,7 @@ const AgentDetail = ({ agent: initialAgent }: AgentDetailProps) => {
                           }}
                           disabled={isSavingModel}
                         >
-                          ✕ Cancel
+                          Cancel
                         </button>
                       </div>
                     ) : (
@@ -415,7 +655,7 @@ const AgentDetail = ({ agent: initialAgent }: AgentDetailProps) => {
                             setSelectedModel(agent.llmModel || '')
                           }}
                         >
-                          ✎ Edit
+                          Edit
                         </button>
                       </div>
                     )}
@@ -458,17 +698,84 @@ const AgentDetail = ({ agent: initialAgent }: AgentDetailProps) => {
           justify-content: space-between;
           align-items: center;
           padding: 1.5rem 2rem;
-          background: rgba(15, 23, 42, 0.8);
-          border-bottom: 1px solid rgba(139, 92, 246, 0.2);
+          background: rgba(var(--gen-color-rgb, 139, 92, 246), 0.1);
+          border-bottom: 1px solid rgba(var(--gen-color-rgb, 139, 92, 246), 0.2);
           backdrop-filter: blur(10px);
           position: sticky;
           top: 0;
           z-index: 100;
         }
 
+        .header-content {
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          gap: 0.5rem;
+        }
+
+        .header-title {
+          display: flex;
+          align-items: center;
+          gap: 1rem;
+        }
+
+        .agent-header-image {
+          width: 50px;
+          height: 50px;
+          border-radius: 50%;
+          border: 2px solid rgba(var(--gen-color-rgb, 139, 92, 246), 0.3);
+          overflow: hidden;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          background: rgba(0, 0, 0, 0.2);
+          flex-shrink: 0;
+        }
+
+        .agent-header-image img {
+          width: 100%;
+          height: 100%;
+          object-fit: cover;
+        }
+
+        .agent-emoji {
+          font-size: 1.5rem;
+        }
+
+        .agent-detail-header h1 {
+          margin: 0;
+          font-size: 1.5rem;
+          color: #e2e8f0;
+        }
+
+        .generation-badge {
+          display: flex;
+          align-items: center;
+          gap: 0.25rem;
+          color: #0A0B10;
+          padding: 0.375rem 0.75rem;
+          border-radius: 20px;
+          font-size: 0.75rem;
+          font-weight: 700;
+          font-family: var(--font-mono, 'Space Mono', monospace);
+          letter-spacing: 0.05em;
+          box-shadow: 0 2px 8px rgba(0, 240, 255, 0.3);
+          z-index: 3;
+        }
+
+        .gen-icon {
+          width: 16px;
+          height: 16px;
+          flex-shrink: 0;
+        }
+
+        .gen-text {
+          font-weight: 800;
+        }
+
         .back-button {
-          background: rgba(139, 92, 246, 0.1);
-          border: 1px solid rgba(139, 92, 246, 0.3);
+          background: rgba(var(--gen-color-rgb, 139, 92, 246), 0.1);
+          border: 1px solid rgba(var(--gen-color-rgb, 139, 92, 246), 0.3);
           color: #cbd5e1;
           padding: 0.5rem 1rem;
           border-radius: 6px;
@@ -478,14 +785,14 @@ const AgentDetail = ({ agent: initialAgent }: AgentDetailProps) => {
         }
 
         .back-button:hover {
-          background: rgba(139, 92, 246, 0.2);
-          border-color: rgba(139, 92, 246, 0.5);
+          background: rgba(var(--gen-color-rgb, 139, 92, 246), 0.2);
+          border-color: rgba(var(--gen-color-rgb, 139, 92, 246), 0.5);
           color: #e2e8f0;
         }
 
         .edit-agent-btn {
-          background: rgba(139, 92, 246, 0.1);
-          border: 1px solid rgba(139, 92, 246, 0.3);
+          background: rgba(var(--gen-color-rgb, 139, 92, 246), 0.1);
+          border: 1px solid rgba(var(--gen-color-rgb, 139, 92, 246), 0.3);
           color: #cbd5e1;
           padding: 0.5rem 1rem;
           border-radius: 6px;
@@ -496,17 +803,10 @@ const AgentDetail = ({ agent: initialAgent }: AgentDetailProps) => {
         }
 
         .edit-agent-btn:hover {
-          background: rgba(139, 92, 246, 0.2);
-          border-color: rgba(139, 92, 246, 0.5);
+          background: rgba(var(--gen-color-rgb, 139, 92, 246), 0.2);
+          border-color: rgba(var(--gen-color-rgb, 139, 92, 246), 0.5);
           color: #e2e8f0;
-          box-shadow: 0 0 12px rgba(139, 92, 246, 0.2);
-        }
-
-        .agent-detail-header h1 {
-          margin: 0;
-          font-size: 1.5rem;
-          flex: 1;
-          text-align: center;
+          box-shadow: 0 0 12px rgba(var(--gen-color-rgb, 139, 92, 246), 0.2);
         }
 
         .header-spacer {
@@ -515,9 +815,9 @@ const AgentDetail = ({ agent: initialAgent }: AgentDetailProps) => {
 
         .agent-banner {
           position: relative;
-          background: linear-gradient(135deg, rgba(139, 92, 246, 0.1) 0%, rgba(99, 102, 241, 0.1) 100%);
-          border-bottom: 1px solid rgba(139, 92, 246, 0.2);
-          padding: 3rem 2rem;
+          background: linear-gradient(135deg, rgba(var(--gen-color-rgb, 139, 92, 246), 0.1) 0%, rgba(99, 102, 241, 0.1) 100%);
+          border-bottom: 1px solid rgba(var(--gen-color-rgb, 139, 92, 246), 0.2);
+          padding: 2rem 2rem;
         }
 
         .agent-banner-bg {
@@ -533,67 +833,25 @@ const AgentDetail = ({ agent: initialAgent }: AgentDetailProps) => {
         .agent-banner-content {
           position: relative;
           z-index: 1;
-          display: grid;
-          grid-template-columns: auto 1fr;
-          gap: 3rem;
-          align-items: center;
-          max-width: 800px;
+          max-width: none;
+          text-align: left;
         }
 
-        .agent-large-image {
-          width: 150px;
-          height: 150px;
-          border-radius: 12px;
-          border: 3px solid rgba(139, 92, 246, 0.3);
-          overflow: hidden;
+        .agent-header-info {
           display: flex;
-          align-items: center;
-          justify-content: center;
-          background: rgba(0, 0, 0, 0.2);
-          flex-shrink: 0;
-        }
-
-        .agent-large-image img {
+          flex-direction: column;
+          align-items: stretch;
+          gap: 1rem;
           width: 100%;
-          height: 100%;
-          object-fit: cover;
-        }
-
-        .agent-emoji {
-          font-size: 3rem;
-        }
-
-        .agent-header-info h2 {
-          margin: 0 0 0.5rem 0;
-          font-size: 2rem;
-          background: linear-gradient(135deg, #8b5cf6 0%, #6366f1 100%);
-          -webkit-background-clip: text;
-          -webkit-text-fill-color: transparent;
         }
 
         .agent-purpose {
-          margin: 0 0 1rem 0;
+          margin: 0;
           color: #94a3b8;
-          font-size: 1.05rem;
-        }
-
-        .agent-meta {
-          display: flex;
-          gap: 2rem;
-        }
-
-        .meta-item {
-          display: flex;
-          gap: 0.5rem;
-        }
-
-        .meta-item .label {
-          color: #64a0ff;
-          font-weight: 600;
-        }
-
-        .meta-item .value {
-          color: #cbd5e1;
+          font-size: 1rem;
+          line-height: 1.5;
+          max-width: none;
+          width: 100%;
         }
 
         /* 3-Section Notebook Layout */
@@ -608,7 +866,7 @@ const AgentDetail = ({ agent: initialAgent }: AgentDetailProps) => {
 
         .section {
           background: rgba(255, 255, 255, 0.03);
-          border: 1px solid rgba(139, 92, 246, 0.2);
+          border: 1px solid rgba(var(--gen-color-rgb, 139, 92, 246), 0.2);
           border-radius: 12px;
           overflow: hidden;
           display: flex;
@@ -619,14 +877,35 @@ const AgentDetail = ({ agent: initialAgent }: AgentDetailProps) => {
 
         .section-header {
           padding: 1.5rem;
-          background: rgba(139, 92, 246, 0.1);
-          border-bottom: 1px solid rgba(139, 92, 246, 0.2);
+          background: rgba(var(--gen-color-rgb, 139, 92, 246), 0.1);
+          border-bottom: 1px solid rgba(var(--gen-color-rgb, 139, 92, 246), 0.2);
           flex-shrink: 0;
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
         }
 
         .section-header h3 {
           margin: 0;
           font-size: 1.1rem;
+          color: #e2e8f0;
+        }
+
+        .new-session-btn {
+          background: rgba(var(--gen-color-rgb, 139, 92, 246), 0.2);
+          border: 1px solid rgba(var(--gen-color-rgb, 139, 92, 246), 0.4);
+          color: #cbd5e1;
+          padding: 0.4rem 0.8rem;
+          border-radius: 6px;
+          cursor: pointer;
+          font-size: 0.85rem;
+          font-weight: 600;
+          transition: all 0.2s;
+        }
+
+        .new-session-btn:hover {
+          background: rgba(var(--gen-color-rgb, 139, 92, 246), 0.3);
+          border-color: rgba(var(--gen-color-rgb, 139, 92, 246), 0.6);
           color: #e2e8f0;
         }
 
@@ -653,45 +932,43 @@ const AgentDetail = ({ agent: initialAgent }: AgentDetailProps) => {
         }
 
         .chat-history-list::-webkit-scrollbar-thumb {
-          background: rgba(139, 92, 246, 0.3);
+          background: rgba(var(--gen-color-rgb, 139, 92, 246), 0.3);
           border-radius: 3px;
         }
 
-        .history-item {
+        .session-item {
+          width: 100%;
           padding: 0.75rem;
           background: rgba(0, 0, 0, 0.2);
           border-radius: 6px;
           cursor: pointer;
           transition: all 0.2s;
-          border-left: 3px solid transparent;
+          border: 1px solid transparent;
           display: flex;
-          gap: 0.5rem;
-          align-items: center;
+          flex-direction: column;
+          gap: 0.25rem;
+          text-align: left;
         }
 
-        .history-item:hover {
+        .session-item:hover {
           background: rgba(139, 92, 246, 0.1);
+          border-color: rgba(var(--gen-color-rgb, 139, 92, 246), 0.3);
         }
 
-        .history-item.user {
-          border-left-color: #64a0ff;
+        .session-item.active {
+          background: rgba(var(--gen-color-rgb, 139, 92, 246), 0.15);
+          border-color: rgba(var(--gen-color-rgb, 139, 92, 246), 0.5);
         }
 
-        .history-item.assistant {
-          border-left-color: #8b5cf6;
-        }
-
-        .history-role {
-          font-size: 1rem;
-          flex-shrink: 0;
-        }
-
-        .history-text {
-          color: #cbd5e1;
+        .session-date {
+          color: #e2e8f0;
           font-size: 0.85rem;
-          white-space: nowrap;
-          overflow: hidden;
-          text-overflow: ellipsis;
+          font-weight: 600;
+        }
+
+        .session-meta {
+          color: #94a3b8;
+          font-size: 0.75rem;
         }
 
         .empty-history {
@@ -717,6 +994,29 @@ const AgentDetail = ({ agent: initialAgent }: AgentDetailProps) => {
           padding: 1rem;
         }
 
+        .load-more-indicator {
+          text-align: center;
+          padding: 0.5rem;
+          color: #94a3b8;
+          font-size: 0.85rem;
+        }
+
+        .backend-offline {
+          color: #fca5a5;
+          font-size: 0.85rem;
+          margin-top: 0.5rem;
+        }
+
+        .backend-offline-message {
+          padding: 0.75rem;
+          background: rgba(239, 68, 68, 0.1);
+          border: 1px solid rgba(239, 68, 68, 0.3);
+          color: #fca5a5;
+          border-radius: 6px;
+          text-align: center;
+          font-size: 0.85rem;
+        }
+
         .messages-container::-webkit-scrollbar {
           width: 6px;
         }
@@ -726,7 +1026,7 @@ const AgentDetail = ({ agent: initialAgent }: AgentDetailProps) => {
         }
 
         .messages-container::-webkit-scrollbar-thumb {
-          background: rgba(139, 92, 246, 0.3);
+          background: rgba(var(--gen-color-rgb, 139, 92, 246), 0.3);
           border-radius: 3px;
         }
 
@@ -781,7 +1081,7 @@ const AgentDetail = ({ agent: initialAgent }: AgentDetailProps) => {
           width: 32px;
           height: 32px;
           border-radius: 50%;
-          background: rgba(139, 92, 246, 0.2);
+          background: rgba(var(--gen-color-rgb, 139, 92, 246), 0.2);
           display: flex;
           align-items: center;
           justify-content: center;
@@ -812,8 +1112,8 @@ const AgentDetail = ({ agent: initialAgent }: AgentDetailProps) => {
         }
 
         .message-bubble {
-          background: rgba(139, 92, 246, 0.2);
-          border: 1px solid rgba(139, 92, 246, 0.3);
+          background: rgba(var(--gen-color-rgb, 139, 92, 246), 0.2);
+          border: 1px solid rgba(var(--gen-color-rgb, 139, 92, 246), 0.3);
           color: #cbd5e1;
           padding: 0.75rem 1rem;
           border-radius: 12px;
@@ -868,14 +1168,14 @@ const AgentDetail = ({ agent: initialAgent }: AgentDetailProps) => {
           gap: 0.5rem;
           padding: 1rem;
           background: rgba(0, 0, 0, 0.2);
-          border-top: 1px solid rgba(139, 92, 246, 0.2);
+          border-top: 1px solid rgba(var(--gen-color-rgb, 139, 92, 246), 0.2);
           flex-shrink: 0;
         }
 
         .chat-input {
           flex: 1;
           background: rgba(255, 255, 255, 0.05);
-          border: 1px solid rgba(139, 92, 246, 0.2);
+          border: 1px solid rgba(var(--gen-color-rgb, 139, 92, 246), 0.2);
           color: #e2e8f0;
           padding: 0.75rem 1rem;
           border-radius: 6px;
@@ -886,7 +1186,7 @@ const AgentDetail = ({ agent: initialAgent }: AgentDetailProps) => {
         .chat-input:focus {
           outline: none;
           background: rgba(255, 255, 255, 0.08);
-          border-color: rgba(139, 92, 246, 0.4);
+          border-color: rgba(var(--gen-color-rgb, 139, 92, 246), 0.4);
         }
 
         .chat-input::placeholder {
@@ -899,21 +1199,23 @@ const AgentDetail = ({ agent: initialAgent }: AgentDetailProps) => {
         }
 
         .send-button {
-          background: linear-gradient(135deg, #8b5cf6 0%, #6366f1 100%);
+          background: linear-gradient(135deg, rgba(var(--gen-color-rgb, 139, 92, 246), 0.8) 0%, rgba(99, 102, 241, 0.8) 100%);
           border: none;
           color: white;
-          width: 40px;
-          height: 40px;
+          width: 50px;
+          height: 50px;
           border-radius: 6px;
           cursor: pointer;
-          font-size: 1.2rem;
           transition: all 0.2s;
           flex-shrink: 0;
+          display: flex;
+          align-items: center;
+          justify-content: center;
         }
 
         .send-button:hover:not(:disabled) {
           transform: scale(1.05);
-          box-shadow: 0 4px 12px rgba(139, 92, 246, 0.4);
+          box-shadow: 0 4px 12px rgba(var(--gen-color-rgb, 139, 92, 246), 0.4);
         }
 
         .send-button:disabled {
@@ -944,7 +1246,7 @@ const AgentDetail = ({ agent: initialAgent }: AgentDetailProps) => {
         }
 
         .description-content::-webkit-scrollbar-thumb {
-          background: rgba(139, 92, 246, 0.3);
+          background: rgba(var(--gen-color-rgb, 139, 92, 246), 0.3);
           border-radius: 3px;
         }
 
@@ -952,7 +1254,7 @@ const AgentDetail = ({ agent: initialAgent }: AgentDetailProps) => {
           background: rgba(0, 0, 0, 0.3);
           border-radius: 8px;
           padding: 1rem;
-          border: 1px solid rgba(139, 92, 246, 0.15);
+          border: 1px solid rgba(var(--gen-color-rgb, 139, 92, 246), 0.15);
         }
 
         .desc-card h4 {
@@ -1017,8 +1319,8 @@ const AgentDetail = ({ agent: initialAgent }: AgentDetailProps) => {
         }
 
         .edit-model-btn {
-          background: rgba(139, 92, 246, 0.2);
-          border: 1px solid rgba(139, 92, 246, 0.4);
+          background: rgba(var(--gen-color-rgb, 139, 92, 246), 0.2);
+          border: 1px solid rgba(var(--gen-color-rgb, 139, 92, 246), 0.4);
           color: #cbd5e1;
           padding: 0.25rem 0.5rem;
           border-radius: 4px;
@@ -1029,8 +1331,8 @@ const AgentDetail = ({ agent: initialAgent }: AgentDetailProps) => {
         }
 
         .edit-model-btn:hover {
-          background: rgba(139, 92, 246, 0.3);
-          border-color: rgba(139, 92, 246, 0.6);
+          background: rgba(var(--gen-color-rgb, 139, 92, 246), 0.3);
+          border-color: rgba(var(--gen-color-rgb, 139, 92, 246), 0.6);
           color: #e2e8f0;
         }
 
@@ -1043,7 +1345,7 @@ const AgentDetail = ({ agent: initialAgent }: AgentDetailProps) => {
 
         .model-select {
           background: rgba(0, 0, 0, 0.3);
-          border: 1px solid rgba(139, 92, 246, 0.4);
+          border: 1px solid rgba(var(--gen-color-rgb, 139, 92, 246), 0.4);
           color: #cbd5e1;
           padding: 0.4rem 0.6rem;
           border-radius: 4px;
@@ -1055,14 +1357,14 @@ const AgentDetail = ({ agent: initialAgent }: AgentDetailProps) => {
 
         .model-select:focus {
           outline: none;
-          border-color: rgba(139, 92, 246, 0.8);
+          border-color: rgba(var(--gen-color-rgb, 139, 92, 246), 0.8);
           background: rgba(0, 0, 0, 0.4);
         }
 
         .save-model-btn,
         .cancel-model-btn {
-          background: rgba(139, 92, 246, 0.2);
-          border: 1px solid rgba(139, 92, 246, 0.4);
+          background: rgba(var(--gen-color-rgb, 139, 92, 246), 0.2);
+          border: 1px solid rgba(var(--gen-color-rgb, 139, 92, 246), 0.4);
           color: #cbd5e1;
           padding: 0.4rem 0.6rem;
           border-radius: 4px;
@@ -1145,29 +1447,34 @@ const AgentDetail = ({ agent: initialAgent }: AgentDetailProps) => {
             padding: 1rem;
           }
 
+          .header-content {
+            gap: 0.25rem;
+          }
+
+          .header-title {
+            gap: 0.75rem;
+          }
+
+          .agent-header-image {
+            width: 40px;
+            height: 40px;
+          }
+
           .agent-detail-header h1 {
             font-size: 1.2rem;
           }
 
+          .header-meta {
+            font-size: 0.7rem;
+            gap: 1rem;
+          }
+
           .agent-banner-content {
-            grid-template-columns: 1fr;
-            gap: 1.5rem;
             padding: 0;
           }
 
-          .agent-large-image {
-            width: 120px;
-            height: 120px;
-            margin: 0 auto;
-          }
-
-          .agent-header-info h2 {
-            font-size: 1.5rem;
-          }
-
-          .agent-meta {
-            flex-direction: column;
-            gap: 0.5rem;
+          .agent-purpose {
+            font-size: 0.9rem;
           }
 
           .message-content {

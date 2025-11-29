@@ -51,7 +51,7 @@ const AgentCard = ({ agent, selected = false, onClick }: AgentCardProps) => {
           {agent.imageUrl && agent.imageUrl.startsWith('http') ? (
             <img src={agent.imageUrl} alt={agent.name} className="agent-image" />
           ) : (
-            agent.imageUrl || '🤖'
+            agent.imageUrl || 'AI'
           )}
         </div>
         <h3>{truncateName(agent.name)}</h3>
@@ -122,7 +122,7 @@ const AgentCard = ({ agent, selected = false, onClick }: AgentCardProps) => {
         }
 
         .agent-card.selected::after {
-          content: '✓ SELECTED';
+          content: 'SELECTED';
           position: absolute;
           top: 1rem;
           left: 1rem;
