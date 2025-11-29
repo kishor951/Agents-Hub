@@ -262,5 +262,34 @@
     "createdAt": "2025-11-29T06:24:24.281Z",
     "minted": false,
     "txHash": "mock_tx_hash_e63fad2572cd4bd2"
+  },
+  {
+    "id": "1764439745184",
+    "tokenId": "child_618e8f68",
+    "name": "EventManager-Synth Fusion",
+    "purpose": "Calm, with with skills in Event planning, Scheduling, Budgeting",
+    "instructions": "Fusion of parent agents",
+    "personality": "Calm, with with skills in Event planning, Scheduling, Budgeting",
+    "skills": [
+      "Brainstorming",
+      "Budgeting",
+      "Creative problem-solving",
+      "Event planning",
+      "Idea generation",
+      "Scheduling"
+    ],
+    "llmModel": "x-ai/grok-4.1-fast:free",
+    "generation": 2,
+    "owner": "addr_test1qqhj4vtl9r9j0cv2wvst367wnfm5r74nmvsd8ccjuvqgxxn5kq4zusy4n28t2q4x2rq3wttx0wpy46w3rx66rcffumksswqsue",
+    "ipfsCid": "Qm7b226e616d65223a224576656e744d616e616765722d",
+    "imageUrl": "👶",
+    "createdAt": "2025-11-29T18:09:05.184Z",
+    "parents": [
+      "agent_addr_tes_1764397464281",
+      "agent_addr_tes_1764397286773"
+    ],
+    "geneticHash": "618e8f688b60c3c9ef37c8f38c0bcbf96508b6018a7c95be3d6cfa4dcba37107",
+    "minted": false,
+    "txHash": ""
   }
 ]

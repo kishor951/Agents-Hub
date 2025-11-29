@@ -192,20 +192,20 @@ Or use Demo Mode to test the platform.`
       {!connected ? (
         <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
           <button onClick={connectWallet} disabled={loading} className="wallet-button">
-            {loading ? '⏳ Connecting...' : '🔗 Connect Wallet'}
+            {loading ? 'Connecting...' : 'Connect Wallet'}
           </button>
           <button onClick={useDemoMode} className="demo-button">
-            🎮 Demo Mode
+            Demo Mode
           </button>
         </div>
       ) : (
         <div className="wallet-info">
           <div className="wallet-status">
-            <span className="wallet-badge">✅ Connected</span>
+            <span className="wallet-badge">Connected</span>
             <span className="wallet-address">{address?.substring(0, 16)}...</span>
           </div>
           <button onClick={disconnectWallet} className="disconnect-button">
-            🔌 Disconnect
+            Disconnect
           </button>
         </div>
       )}

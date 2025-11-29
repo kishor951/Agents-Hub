@@ -37,11 +37,11 @@ const AgentCreationProgress = ({ isOpen, currentStep, errorMessage, onClose }: A
   if (!isOpen) return null
 
   const steps = [
-    { id: 'validating', label: 'Validating Data', icon: '🔍' },
-    { id: 'uploading', label: 'Uploading to IPFS', icon: '📤' },
-    { id: 'saving', label: 'Saving Metadata', icon: '💾' },
-    { id: 'minting', label: 'Building Mint TX', icon: '⛓️' },
-    { id: 'complete', label: 'Agent Created', icon: '✅' }
+    { id: 'validating', label: 'Validating Data', icon: <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg> },
+    { id: 'uploading', label: 'Uploading to IPFS', icon: <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7,10 12,15 17,10"/><line x1="12" x2="12" y1="15" y2="3"/></svg> },
+    { id: 'saving', label: 'Saving Metadata', icon: <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17,21 17,13 7,13 7,21"/><polyline points="7,3 7,8 15,8"/></svg> },
+    { id: 'minting', label: 'Building Mint TX', icon: <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M6.5 6.5l.5.5"/><path d="M10.5 10.5l.5.5"/><path d="M14.5 14.5l.5.5"/><path d="M18.5 18.5l.5.5"/><path d="M6.5 18.5l.5-.5"/><path d="M10.5 14.5l.5-.5"/><path d="M14.5 10.5l.5-.5"/><path d="M18.5 6.5l.5-.5"/></svg> },
+    { id: 'complete', label: 'Agent Created', icon: <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="20,6 9,17 4,12"/></svg> }
   ]
 
   const getStepStatus = (stepId: string) => {
@@ -64,7 +64,7 @@ const AgentCreationProgress = ({ isOpen, currentStep, errorMessage, onClose }: A
         <div className="progress-header">
           <h2>Creating Your Agent</h2>
           {currentStep === 'complete' && (
-            <button className="close-btn" onClick={onClose}>✕</button>
+            <button className="close-btn" onClick={onClose}>×</button>
           )}
         </div>
 
@@ -87,7 +87,7 @@ const AgentCreationProgress = ({ isOpen, currentStep, errorMessage, onClose }: A
                   </div>
                 )}
                 {status === 'complete' && (
-                  <div className="step-check">✓</div>
+                  <div className="step-check">Done</div>
                 )}
               </div>
             )
@@ -97,7 +97,7 @@ const AgentCreationProgress = ({ isOpen, currentStep, errorMessage, onClose }: A
         {/* Error Message */}
         {currentStep === 'error' && errorMessage && (
           <div className="error-message">
-            <span className="error-icon">⚠️</span>
+            <span className="error-icon">Warning</span>
             <p>{errorMessage}</p>
             <button className="retry-btn" onClick={onClose}>Close</button>
           </div>
@@ -106,7 +106,7 @@ const AgentCreationProgress = ({ isOpen, currentStep, errorMessage, onClose }: A
         {/* Success Message */}
         {currentStep === 'complete' && (
           <div className="success-message">
-            <h3>🎉 Agent Created & NFT Ready!</h3>
+            <h3>Agent Created & NFT Ready!</h3>
             <p>Your agent has been minted as an NFT. Sign with your wallet to complete the transaction.</p>
             <button className="done-btn" onClick={onClose}>View My Agents</button>
           </div>
@@ -138,7 +138,7 @@ const AgentCreationProgress = ({ isOpen, currentStep, errorMessage, onClose }: A
           border: 1px solid rgba(139, 92, 246, 0.3);
           border-radius: 16px;
           padding: 2rem;
-          max-width: 500px;
+          max-width: 600px;
           width: 90%;
           box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
           animation: slideUp 0.3s ease-out;
@@ -208,7 +208,7 @@ const AgentCreationProgress = ({ isOpen, currentStep, errorMessage, onClose }: A
         .progress-steps {
           display: flex;
           flex-direction: column;
-          gap: 1rem;
+          gap: 0.75rem;
           margin-bottom: 2rem;
         }
 
@@ -216,7 +216,7 @@ const AgentCreationProgress = ({ isOpen, currentStep, errorMessage, onClose }: A
           display: flex;
           align-items: center;
           gap: 1rem;
-          padding: 1rem;
+          padding: 0.75rem;
           background: rgba(255, 255, 255, 0.05);
           border: 1px solid rgba(139, 92, 246, 0.2);
           border-radius: 8px;

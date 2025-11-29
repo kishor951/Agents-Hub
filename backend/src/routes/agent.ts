@@ -404,6 +404,33 @@ router.get('/agents', async (req, res) => {
 })
 
 /**
+ * GET /api/agents/:id
+ * Get a single agent by ID from local storage
+ */
+router.get('/agents/:id', async (req, res) => {
+  try {
+    const { id } = req.params
+
+    console.log(`🔍 [Get Agent] Looking for agent with ID: ${id}`)
+
+    // Find agent by ID in local storage
+    const agent = agentsStore.find(a => a.id === id)
+
+    if (!agent) {
+      console.log(`❌ [Get Agent] Agent not found: ${id}`)
+      return res.status(404).json({ error: 'Agent not found' })
+    }
+
+    console.log(`✅ [Get Agent] Found agent: ${agent.name} (${agent.id})`)
+
+    res.json(agent)
+  } catch (error) {
+    console.error('❌ [Get Agent] Error:', error)
+    res.status(500).json({ error: 'Failed to fetch agent' })
+  }
+})
+
+/**
  * GET /api/agents/configs
  * Load agent configurations from the agents directory
  * Note: This endpoint returns empty since agents are user-created, not predefined

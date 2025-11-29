@@ -741,12 +741,14 @@ const CreateAgent = ({ walletAddress, onAgentCreated }: CreateAgentProps) => {
           font-size: 0.9rem;
           cursor: pointer;
           transition: all 0.2s;
+          outline: none;
         }
 
         .template-btn:hover {
           background: rgba(139, 92, 246, 0.1);
           transform: translateY(-1px);
           box-shadow: 0 4px 12px rgba(139, 92, 246, 0.3);
+          outline: none;
         }
 
         .page-header {
