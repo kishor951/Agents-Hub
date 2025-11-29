@@ -1,5 +1,20 @@
 import axios from 'axios'
-import { BlockfrostProvider, MeshTxBuilder, MeshWallet } from '@meshsdk/core'
+import { BlockfrostProvider, MeshTxBuilder, mConStr0 } from '@meshsdk/core'
+import fs from 'fs/promises'
+import path from 'path'
+import { fileURLToPath } from 'url'
+
+const __filename = fileURLToPath(import.meta.url)
+const __dirname = path.dirname(__filename)
+
+// Aiken minting policy - compiled Plutus V3 script (CBOR hex from plutus.json)
+const AIKEN_POLICY_CODE = "585401010029800aba2aba1aab9eaab9dab9a4888896600264653001300600198031803800cc0180092225980099b8748000c01cdd500144c9289bae30093008375400516401830060013003375400d149a26cac8009"
+const AIKEN_POLICY_ID = "def68337867cb4f1f95b6b811fedbfcdd7780d10a95cc072077088ea" // From Aiken build output
+
+console.log('🔧 Aiken Policy Loaded:')
+console.log('   Policy ID:', AIKEN_POLICY_ID)
+console.log('   Script Version: PlutusV3')
+console.log('   Code Length:', AIKEN_POLICY_CODE.length, 'chars')
 
 // Determine network and Blockfrost URL based on project ID prefix
 const getNetworkConfig = () => {
@@ -97,9 +112,54 @@ export async function buildMintTransaction(
   }
 
   console.log(`✅ Found ${utxos.length} UTXOs.`)
-  
+
+  // Separate collateral UTXO (required for Plutus transactions)
+  const MIN_COLLATERAL = 5000000n // 5 ADA
+  const collateralCandidates = utxos.filter((utxo: any) => {
+    if (!utxo?.output?.amount) return false
+    if (utxo.output.amount.length !== 1) return false
+    const onlyAsset = utxo.output.amount[0]
+    if (!onlyAsset || onlyAsset.unit !== 'lovelace') return false
+    try {
+      const quantity = BigInt(onlyAsset.quantity)
+      return quantity >= MIN_COLLATERAL
+    } catch {
+      return false
+    }
+  })
+
+  const collateralUtxo = collateralCandidates[0]
+
+  if (!collateralUtxo) {
+    throw new Error(
+      'No suitable collateral UTXO found. Enable collateral (5 ADA) in your wallet settings and try again.'
+    )
+  }
+
+  console.log('✅ Collateral UTXO selected:', {
+    txHash: collateralUtxo.input?.txHash,
+    index: collateralUtxo.input?.outputIndex,
+    lovelace: collateralUtxo.output?.amount?.[0]?.quantity,
+  })
+
+  // Spendable UTXOs exclude collateral
+  const spendableUtxos = utxos.filter((utxo: any) => {
+    return !(
+      utxo.input?.txHash === collateralUtxo.input?.txHash &&
+      utxo.input?.outputIndex === collateralUtxo.input?.outputIndex
+    )
+  })
+
+  if (spendableUtxos.length === 0) {
+    throw new Error('No spendable UTXOs available after reserving collateral. Send additional test ADA to this wallet and try again.')
+  }
+
+  if (spendableUtxos.length !== utxos.length) {
+    console.log(`✅ ${utxos.length - spendableUtxos.length} UTXO reserved as collateral, ${spendableUtxos.length} UTXOs available for spending.`)
+  }
+
   // Log UTXO details
-  const totalLovelace = utxos.reduce((sum, utxo) => {
+  const totalLovelace = spendableUtxos.reduce((sum, utxo) => {
     const lovelaceAmount = utxo.output.amount.find((a: any) => a.unit === 'lovelace')
     return sum + (lovelaceAmount ? parseInt(lovelaceAmount.quantity) : 0)
   }, 0)
@@ -112,33 +172,101 @@ export async function buildMintTransaction(
     submitter: blockfrostProvider,
   })
 
-  // Build mint transaction - simplified for demo
-  // Just add metadata, no actual minting policy yet (that requires plutus script)
-  console.log('🏗️  Building transaction...')
+  // Create asset name from genetic hash
+  // Asset names in Cardano must be hex-encoded
+  const assetNameUtf8 = `Agent${geneticHash.substring(0, 8)}`
+  const assetNameHex = Buffer.from(assetNameUtf8, 'utf8').toString('hex')
+  
+  console.log('🪙 Preparing NFT minting with Aiken policy...')
+  console.log(`   Policy ID: ${AIKEN_POLICY_ID}`)
+  console.log(`   Asset Name (UTF-8): ${assetNameUtf8}`)
+  console.log(`   Asset Name (Hex): ${assetNameHex}`)
+  console.log(`   Full Asset: ${AIKEN_POLICY_ID}.${assetNameHex}`)
+
+  // Build mint transaction with Aiken minting policy
+  console.log('🏗️  Building transaction with native token minting...')
   let unsignedTxCbor: string
+  
+  // Try Aiken-based native token minting first, fallback to metadata-only if it fails
   try {
+    console.log('   Attempting Aiken Plutus V3 minting...')
     unsignedTxCbor = await txBuilder
+      .selectUtxosFrom(spendableUtxos)
       .changeAddress(ownerAddress)
-      .selectUtxosFrom(utxos)
+      .txInCollateral(
+        collateralUtxo.input.txHash,
+        collateralUtxo.input.outputIndex,
+        collateralUtxo.output.amount,
+        ownerAddress
+      )
+      // Mint 1 NFT using Plutus V3 script
+      .mintPlutusScriptV3()
+      .mint('1', AIKEN_POLICY_ID, assetNameHex)
+      .mintingScript(AIKEN_POLICY_CODE)
+      .mintRedeemerValue(mConStr0([]), 'Mesh')  // Plutus unit redeemer
+      // Add CIP-25 metadata for NFT
       .metadataValue('721', {
-        [geneticHash]: {
-          name: `Agent_${geneticHash.substring(0, 8)}`,
-          image: `ipfs://${ipfsCid}`,
-          geneticHash,
-          parents,
-          network,
+        [AIKEN_POLICY_ID]: {
+          [assetNameHex]: {
+            name: assetNameUtf8,
+            image: `ipfs://${ipfsCid}`,
+            geneticHash,
+            parents,
+            network,
+            description: 'Agents Hub AI Agent NFT with Aiken validation',
+            mediaType: 'application/json',
+          },
         },
       })
       .complete()
     
-    console.log('✅ Transaction CBOR built successfully!')
-    console.log(`   CBOR length: ${unsignedTxCbor.length} chars`)
-  } catch (buildError: any) {
-    console.error('❌ Transaction building failed:', buildError)
-    console.error('   Error message:', buildError.message)
-    console.error('   Error stack:', buildError.stack)
-    throw new Error(`Failed to build transaction: ${buildError.message}`)
+    console.log('✅ Aiken native token minting transaction built!')
+  } catch (aikenError: any) {
+    console.warn('⚠️  Aiken minting failed, falling back to metadata-only mode')
+    console.warn('   Aiken error:', aikenError.message)
+    console.warn('   Raw error object:', aikenError)
+    
+    // Fallback: Build simpler metadata-only transaction
+    console.log('🔄 Building metadata-only transaction (CIP-25 only, no native tokens)...')
+    const simpleTxBuilder = new MeshTxBuilder({
+      fetcher: blockfrostProvider,
+      submitter: blockfrostProvider,
+    })
+    
+    unsignedTxCbor = await simpleTxBuilder
+      .selectUtxosFrom(spendableUtxos)
+      .changeAddress(ownerAddress)
+      .txInCollateral(
+        collateralUtxo.input.txHash,
+        collateralUtxo.input.outputIndex,
+        collateralUtxo.output.amount,
+        ownerAddress
+      )
+      .metadataValue('721', {
+        [`metadata_${geneticHash.substring(0, 16)}`]: {
+          [assetNameUtf8]: {
+            name: assetNameUtf8,
+            image: `ipfs://${ipfsCid}`,
+            geneticHash,
+            parents,
+            network,
+            description: 'Agents Hub AI Agent (Metadata-only mode)',
+            mediaType: 'application/json',
+          },
+        },
+      })
+      .complete()
+    
+    console.log('✅ Metadata-only transaction built (fallback mode)')
   }
+  
+  if (!unsignedTxCbor) {
+    throw new Error('Failed to build transaction in both Aiken and fallback modes')
+  }
+    
+  console.log('✅ Transaction CBOR built successfully!')
+  console.log(`   CBOR length: ${unsignedTxCbor.length} chars`)
+  console.log(`   With CIP-25 metadata attached`)
 
   // The unsignedTxCbor is a hex string, we need to compute its hash
   // For now, generate a deterministic transaction ID from the CBOR

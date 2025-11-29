@@ -237,6 +237,7 @@ router.post('/agents/create', upload.single('picture'), async (req, res) => {
 
     // Step 4: Build mint transaction for the agent (creation = instant NFT)
     let mintTxData = null
+    let mintError = null
     try {
       // Compute genetic hash for agent (hash of metadata)
       const geneticData = {
@@ -269,9 +270,10 @@ router.post('/agents/create', upload.single('picture'), async (req, res) => {
       // Store transaction info with agent
       newAgent.txHash = mintTxData.txHash
       await saveAgents()
-    } catch (txError) {
+    } catch (txError: any) {
       console.error('⚠️  [Mint TX] Failed to build transaction:', txError)
-      // Continue - user can still mint later
+      mintError = txError.message || 'Failed to build mint transaction'
+      // Continue - agent is still saved, user can try again with funds
       mintTxData = null
     }
 
@@ -286,11 +288,96 @@ router.post('/agents/create', upload.single('picture'), async (req, res) => {
         unsignedTx: mintTxData.unsignedTx,
         txHash: mintTxData.txHash,
         message: 'Sign this transaction to mint your agent as an NFT'
-      } : null
+      } : null,
+      mintError: mintError // Send error info to frontend
     })
   } catch (error) {
     console.error('❌ [Create Agent] Error:', error)
     res.status(500).json({ error: 'Failed to create agent' })
+  }
+})
+
+/**
+ * DELETE /api/agents/:id
+ * Remove an agent from local storage (does not burn on-chain NFTs)
+ */
+router.delete('/agents/:id', async (req, res) => {
+  try {
+    const { id } = req.params
+    const ownerFromRequest = (req.body && req.body.owner) || (typeof req.query.owner === 'string' ? req.query.owner : undefined)
+
+    if (!id) {
+      return res.status(400).json({ error: 'Agent id is required' })
+    }
+
+    const agentIndex = agentsStore.findIndex(agent => agent.id === id)
+
+    if (agentIndex === -1) {
+      return res.status(404).json({ error: 'Agent not found' })
+    }
+
+    const agent = agentsStore[agentIndex]
+
+    if (ownerFromRequest && agent.owner !== ownerFromRequest) {
+      return res.status(403).json({ error: 'Owner mismatch - cannot delete this agent' })
+    }
+
+    agentsStore.splice(agentIndex, 1)
+    await saveAgents()
+
+    console.log(`🗑️  [Delete Agent] Removed agent ${id}${agent.minted ? ' (minted on-chain)' : ''}`)
+
+    res.json({
+      success: true,
+      message: 'Agent removed from local storage',
+      agent,
+    })
+  } catch (error) {
+    console.error('❌ [Delete Agent] Error:', error)
+    res.status(500).json({ error: 'Failed to delete agent' })
+  }
+})
+
+/**
+ * POST /api/agents/:id/mint-complete
+ * Update agent with final mint transaction hash
+ */
+router.post('/agents/:id/mint-complete', async (req, res) => {
+  try {
+    const { id } = req.params
+    const { txHash } = req.body
+
+    if (!txHash) {
+      return res.status(400).json({ error: 'txHash is required' })
+    }
+
+    console.log(`\n✅ [Mint Complete] Agent: ${id}`)
+    console.log(`   TX Hash: ${txHash}`)
+
+    // Find agent
+    const agent = agentsStore.find(a => a.id === id)
+    if (!agent) {
+      return res.status(404).json({ error: 'Agent not found' })
+    }
+
+    // Update agent with minting info
+    agent.minted = true
+    agent.txHash = txHash
+    agent.mintedAt = new Date().toISOString()
+
+    // Save to storage
+    await saveAgents()
+
+    console.log(`💾 [Mint Complete] Agent ${id} marked as minted`)
+    console.log(`   TX Hash: ${txHash}`)
+
+    res.json({ 
+      success: true,
+      agent
+    })
+  } catch (error) {
+    console.error('❌ [Mint Complete] Error:', error)
+    res.status(500).json({ error: 'Failed to update agent mint status' })
   }
 })
 

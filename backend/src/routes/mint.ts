@@ -100,14 +100,58 @@ router.post('/submit-tx', async (req, res) => {
       // Decode both the unsigned TX and witness set
       const unsignedTxDecoded = cbor.default.decode(Buffer.from(unsignedTx, 'hex'))
       const witnessSetDecoded = cbor.default.decode(Buffer.from(witnessSet, 'hex'))
-      
+
       console.log('   Unsigned TX structure:', JSON.stringify(unsignedTxDecoded).substring(0, 200))
       console.log('   Witness set structure:', JSON.stringify(witnessSetDecoded).substring(0, 200))
-      
+
       // Cardano transaction CBOR: [body, witnessSet, valid, auxiliaryData]
-      // Replace the empty witness set (index 1) with the wallet's witnesses
-      unsignedTxDecoded[1] = witnessSetDecoded
-      
+      // Merge wallet witness signatures into the unsigned witness set instead of replacing scripts
+      const unsignedWitnessSet = unsignedTxDecoded[1]
+      const walletWitnessSet = witnessSetDecoded
+
+      const mergeWitnessMaps = (base: Map<any, any>, incoming: Map<any, any>) => {
+        const merged = new Map(base)
+        for (const [key, value] of incoming.entries()) {
+          if (!merged.has(key)) {
+            merged.set(key, value)
+            continue
+          }
+          const existing = merged.get(key)
+
+          if (Array.isArray(existing) && Array.isArray(value)) {
+            merged.set(key, [...existing, ...value])
+            continue
+          }
+
+          if (existing instanceof Map && value instanceof Map) {
+            merged.set(key, mergeWitnessMaps(existing, value))
+            continue
+          }
+
+          if (existing === undefined || existing === null) {
+            merged.set(key, value)
+            continue
+          }
+
+          if (Array.isArray(existing)) {
+            merged.set(key, [...existing, value])
+            continue
+          }
+
+          merged.set(key, [existing, value])
+        }
+        return merged
+      }
+
+      if (unsignedWitnessSet instanceof Map && walletWitnessSet instanceof Map) {
+        unsignedTxDecoded[1] = mergeWitnessMaps(unsignedWitnessSet, walletWitnessSet)
+      } else {
+        console.warn('⚠️  Witness sets not Map instances, defaulting to wallet witness set merge append')
+        unsignedTxDecoded[1] = walletWitnessSet
+      }
+
+      console.log('   Merged witness keys:', Array.from((unsignedTxDecoded[1] instanceof Map ? unsignedTxDecoded[1] : new Map()).keys()))
+
       // Re-encode to CBOR
       const signedTxHex = cbor.default.encode(unsignedTxDecoded).toString('hex')
       

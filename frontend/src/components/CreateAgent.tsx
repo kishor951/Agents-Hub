@@ -134,6 +134,28 @@ const CreateAgent = ({ walletAddress, onAgentCreated, onStartBreeding }: CreateA
         }, 1000)
         
         // DON'T reset form or reload agents yet - wait for minting
+      } else if (response.data.mintError) {
+        // Minting failed - show error but agent was still created
+        console.error('⚠️ Mint transaction failed:', response.data.mintError)
+        
+        setProgressStep('error')
+        
+        // Check if it's a funding issue
+        if (response.data.mintError.includes('No UTXOs') || response.data.mintError.includes('no funds')) {
+          setErrorMessage(
+            '⚠️ Agent created but minting failed: Your wallet has no testnet ADA.\n\n' +
+            '🎯 Get free testnet ADA from:\nhttps://docs.cardano.org/cardano-testnets/tools/faucet/\n\n' +
+            'Your agent is saved and you can mint it later once you have funds!'
+          )
+        } else {
+          setErrorMessage(`Agent created but minting failed: ${response.data.mintError}`)
+        }
+        
+        // Still reload agents - agent was created successfully
+        setTimeout(() => {
+          loadUserAgents()
+          onAgentCreated(createdAgent)
+        }, 5000) // Give user time to read the error
       } else {
         console.log('⚠️ No mint transaction returned from backend')
         
@@ -278,6 +300,19 @@ const CreateAgent = ({ walletAddress, onAgentCreated, onStartBreeding }: CreateA
 
                     console.log('✅ Transaction submitted!', response.data)
                     
+                    // Update agent status in backend
+                    if (createdAgent?.id) {
+                      try {
+                        await axios.post(`http://localhost:5000/api/agents/${createdAgent.id}/mint-complete`, {
+                          txHash: response.data.txHash
+                        })
+                        console.log('✅ Agent marked as minted in backend')
+                      } catch (updateError) {
+                        console.error('⚠️ Failed to update agent mint status:', updateError)
+                        // Continue anyway - transaction succeeded
+                      }
+                    }
+                    
                     alert(
                       `🎉 NFT Minting Started!\n\n` +
                       `Transaction: ${response.data.txHash}\n` +
@@ -286,7 +321,7 @@ const CreateAgent = ({ walletAddress, onAgentCreated, onStartBreeding }: CreateA
                       `Check CardanoScan: https://preprod.cardanoscan.io/transaction/${response.data.txHash}`
                     )
 
-                    // Update agent as minted
+                    // Update local state
                     if (createdAgent) {
                       createdAgent.minted = true
                       createdAgent.txHash = response.data.txHash
