@@ -4,7 +4,6 @@ import AgentCard from './AgentCard'
 import SelectionToast from './SelectionToast'
 import ComparisonScreen from './ComparisonScreen'
 import FusionProgression from './FusionProgression'
-import AgentChat from './AgentChat'
 import axios from 'axios'
 
 interface DashboardProps {
@@ -21,8 +20,6 @@ const Dashboard = ({ walletAddress, onStartBreeding, onViewAgent }: DashboardPro
   const [showComparison, setShowComparison] = useState(false)
   const [showFusionProgression, setShowFusionProgression] = useState(false)
   const [fusionAgents, setFusionAgents] = useState<[Agent, Agent] | null>(null)
-  const [showChat, setShowChat] = useState(false)
-  const [chatAgent, setChatAgent] = useState<(Agent & { fullData?: any }) | null>(null)
 
   useEffect(() => {
     const loadAgents = async () => {
@@ -44,18 +41,6 @@ const Dashboard = ({ walletAddress, onStartBreeding, onViewAgent }: DashboardPro
 
   const handleAgentCardClick = (agent: Agent) => {
     onViewAgent(agent)
-  }
-
-  const handleSelectAgent = (agent: Agent & { fullData?: any }) => {
-    setSelectedAgents(prev => {
-      const isAlreadySelected = prev.some(a => a.id === agent.id)
-      if (isAlreadySelected) {
-        return prev.filter(a => a.id !== agent.id)
-      } else if (prev.length < 2) {
-        return [...prev, agent]
-      }
-      return prev
-    })
   }
 
   const handleRemoveAgent = (agentId: string) => {
@@ -100,11 +85,6 @@ const Dashboard = ({ walletAddress, onStartBreeding, onViewAgent }: DashboardPro
     return selectedAgents.some(a => a.id === agentId)
   }
 
-  const handleChatAgent = (agent: Agent & { fullData?: any }) => {
-    setChatAgent(agent)
-    setShowChat(true)
-  }
-
   return (
     <div className="dashboard">
       <h2>My Agents</h2>
@@ -132,8 +112,6 @@ const Dashboard = ({ walletAddress, onStartBreeding, onViewAgent }: DashboardPro
               agent={agent}
               selected={isAgentSelected(agent.id)}
               onClick={() => handleAgentCardClick(agent)}
-              onSelect={() => handleSelectAgent(agent)}
-              onChat={() => handleChatAgent(agent)}
             />
           ))}
         </div>
@@ -170,16 +148,6 @@ const Dashboard = ({ walletAddress, onStartBreeding, onViewAgent }: DashboardPro
           }}
         />
       )}
-
-      {/* Agent Chat */}
-      <AgentChat
-        agent={chatAgent}
-        isOpen={showChat}
-        onClose={() => {
-          setShowChat(false)
-          setChatAgent(null)
-        }}
-      />
 
       <style>{`
         .dashboard {

@@ -5,10 +5,9 @@ import axios from 'axios'
 
 const router = Router()
 
-// Get network configuration from environment
-const BLOCKFROST_PROJECT_ID = process.env.BLOCKFROST_PROJECT_ID || ''
-
 const getNetworkConfig = () => {
+  const BLOCKFROST_PROJECT_ID = process.env.BLOCKFROST_PROJECT_ID || ''
+  
   if (BLOCKFROST_PROJECT_ID.startsWith('mainnet')) {
     return { network: 'mainnet', url: 'https://cardano-mainnet.blockfrost.io/api/v0' }
   } else if (BLOCKFROST_PROJECT_ID.startsWith('preprod')) {
@@ -66,10 +65,17 @@ router.post('/submit-tx', async (req, res) => {
     const { signedTx } = req.body
 
     if (!signedTx) {
-      return res.status(400).json({ error: 'Missing signed transaction' })
+      return res.status(400).json({ error: 'Missing signedTx' })
     }
 
     console.log('📤 Submitting signed transaction to blockchain...')
+    console.log('   Signed TX length:', signedTx.length)
+    console.log('   Signed TX (first 50 chars):', signedTx.substring(0, 50))
+
+    // Read BLOCKFROST_PROJECT_ID dynamically (not at module load time)
+    const BLOCKFROST_PROJECT_ID = process.env.BLOCKFROST_PROJECT_ID || ''
+    
+    console.log('🔑 Blockfrost ID check:', BLOCKFROST_PROJECT_ID ? `Present (${BLOCKFROST_PROJECT_ID.substring(0, 10)}...)` : 'MISSING')
 
     // Check if Blockfrost is configured
     if (!BLOCKFROST_PROJECT_ID || BLOCKFROST_PROJECT_ID.includes('XXXXX')) {
@@ -86,53 +92,82 @@ router.post('/submit-tx', async (req, res) => {
     const { network, url } = getNetworkConfig()
     console.log(`🌐 Submitting to ${network} network...`)
 
-    try {
-      // Submit transaction to Blockfrost
-      const response = await axios.post(
-        `${url}/tx/submit`,
-        signedTx,
-        {
-          headers: {
-            'Content-Type': 'application/cbor',
-            'project_id': BLOCKFROST_PROJECT_ID
-          }
-        }
-      )
+    // The wallet returns a complete signed transaction - submit directly
+    console.log('📡 Sending to Blockfrost...')
 
-      const txHash = response.data
-      console.log(`✅ Transaction submitted successfully!`)
-      console.log(`   TX Hash: ${txHash}`)
-      console.log(`   Network: ${network}`)
-      console.log(`   Explorer: https://${network}.cardanoscan.io/transaction/${txHash}`)
+    // The wallet returns a complete signed transaction - submit directly
+    console.log('📡 Sending to Blockfrost...')
 
-      res.json({ 
-        txHash,
-        status: 'submitted',
-        network,
-        explorerUrl: `https://${network}.cardanoscan.io/transaction/${txHash}`
-      })
-    } catch (blockfrostError: any) {
-      console.error('❌ Blockfrost submission error:', blockfrostError.response?.data || blockfrostError.message)
+      // Retry logic for rate limits
+      let lastError: any = null
+      const maxRetries = 3
       
-      // Provide helpful error messages
-      if (blockfrostError.response?.status === 400) {
-        return res.status(400).json({ 
-          error: 'Invalid transaction format',
-          details: blockfrostError.response.data
-        })
-      } else if (blockfrostError.response?.status === 403) {
-        return res.status(403).json({ 
-          error: 'Blockfrost authentication failed - check your API key'
-        })
-      } else if (blockfrostError.response?.data?.message?.includes('UTxO')) {
-        return res.status(400).json({ 
-          error: 'Transaction validation failed - UTxO may have been spent',
-          details: blockfrostError.response.data
-        })
-      }
+      for (let attempt = 1; attempt <= maxRetries; attempt++) {
+        try {
+          if (attempt > 1) {
+            const delay = Math.pow(2, attempt - 1) * 1000 // Exponential backoff: 2s, 4s, 8s
+            console.log(`⏳ Retry attempt ${attempt}/${maxRetries} after ${delay}ms...`)
+            await new Promise(resolve => setTimeout(resolve, delay))
+          }
 
-      throw blockfrostError
+          // Submit transaction to Blockfrost
+          const response = await axios.post(
+            `${url}/tx/submit`,
+            Buffer.from(signedTx, 'hex'),
+            {
+              headers: {
+                'Content-Type': 'application/cbor',
+                'project_id': BLOCKFROST_PROJECT_ID
+              }
+            }
+          )
+
+        const txHash = response.data
+        console.log(`✅ Transaction submitted successfully!`)
+        console.log(`   TX Hash: ${txHash}`)
+        console.log(`   Network: ${network}`)
+        console.log(`   Explorer: https://${network}.cardanoscan.io/transaction/${txHash}`)
+
+        return res.json({ 
+          txHash,
+          status: 'submitted',
+          network,
+          explorerUrl: `https://${network}.cardanoscan.io/transaction/${txHash}`
+        })
+      } catch (blockfrostError: any) {
+        lastError = blockfrostError
+        
+        // Rate limit - retry
+        if (blockfrostError.response?.status === 429) {
+          console.log(`⚠️  Rate limit hit (429), will retry...`)
+          if (attempt < maxRetries) continue
+        }
+        
+        // Other errors - don't retry
+        console.error('❌ Blockfrost submission error:', blockfrostError.response?.data || blockfrostError.message)
+        
+        if (blockfrostError.response?.status === 400) {
+          return res.status(400).json({ 
+            error: 'Invalid transaction format',
+            details: blockfrostError.response.data
+          })
+        } else if (blockfrostError.response?.status === 403) {
+          return res.status(403).json({ 
+            error: 'Blockfrost authentication failed - check your API key'
+          })
+        } else if (blockfrostError.response?.data?.message?.includes('UTxO')) {
+          return res.status(400).json({ 
+            error: 'Transaction validation failed - UTxO may have been spent',
+            details: blockfrostError.response.data
+          })
+        }
+
+        break // Don't retry for non-rate-limit errors
+      }
     }
+
+    // All retries failed
+    throw lastError
   } catch (error: any) {
     console.error('❌ Transaction submission error:', error.message)
     res.status(500).json({ 

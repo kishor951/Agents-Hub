@@ -2,6 +2,16 @@ import { Router } from 'express'
 import { QueryRequest } from '../types/index.js'
 import { queryAgent, generatePersonaPrompt } from '../services/llmService.js'
 import { getTokenInfo, buildMintTransaction } from '../services/cardanoService.js'
+import { 
+  editAgent, 
+  batchEditAgents, 
+  updateAgentLLMModel,
+  updateAgentSkills,
+  addAgentSkill,
+  removeAgentSkill,
+  validateAgentData,
+  getEditableFields
+} from '../services/agentEditService.js'
 import multer from 'multer'
 import { promises as fs } from 'fs'
 import path from 'path'
@@ -75,36 +85,46 @@ router.get('/agent/:tokenId', async (req, res) => {
 
 /**
  * POST /api/agent/query
- * Query an agent using LLM (Open Router + Grok 4.1)
+ * Query an agent using LLM (Open Router + selected model)
  */
 router.post('/agent/query', async (req, res) => {
   try {
-    const { tokenId, query, personaPrompt, skills, agentName }: QueryRequest & { agentName?: string } = req.body
+    const { tokenId, query, personaPrompt, skills, agentName, llmModel }: QueryRequest & { agentName?: string; llmModel?: string } = req.body
+
+    console.log('\n🔧 [DEBUG] /api/agent/query received')
+    console.log('🔧 [DEBUG] Request body:', JSON.stringify(req.body, null, 2))
 
     if (!query || !skills || skills.length === 0) {
+      console.log('🔧 [DEBUG] Validation failed: missing query or skills')
       return res.status(400).json({ error: 'Missing required fields: query and skills array' })
     }
 
     console.log(`\n🤖 [Agent Query] Agent: ${tokenId || agentName || 'Unknown'}`)
     console.log(`   Query: "${query.substring(0, 50)}..."`)
+    console.log(`   LLM Model: ${llmModel || 'undefined (will use default)'}`)
     console.log(`   Skills: ${skills.join(', ')}`)
 
     // Use provided persona prompt or generate one
     const persona = personaPrompt || generatePersonaPrompt(agentName || tokenId || 'Agent', skills)
+    console.log(`   Persona: ${persona.substring(0, 50)}...`)
 
-    const response = await queryAgent(persona, skills, query)
+    console.log('🔧 [DEBUG] Calling queryAgent with llmModel:', llmModel)
+    const response = await queryAgent(persona, skills, query, llmModel)
 
-    console.log(`✅ [Agent Response] Received ${response.length} characters\n`)
+    console.log(`✅ [Agent Response] Received ${response.length} characters`)
+    console.log(`✅ [Response Preview] ${response.substring(0, 100)}...`)
 
     res.json({ 
       response, 
       tokenId, 
       agentName,
+      llmModel,
       timestamp: new Date().toISOString()
     })
   } catch (error) {
     console.error('❌ Agent query error:', error)
-    res.status(500).json({ error: 'Failed to query agent' })
+    console.log('🔧 [DEBUG] Error stack:', (error as any)?.stack)
+    res.status(500).json({ error: 'Failed to query agent', details: (error as any)?.message })
   }
 })
 
@@ -312,6 +332,216 @@ router.get('/agents/configs', async (req, res) => {
   } catch (error) {
     console.error('❌ Agent configs loading error:', error)
     res.status(500).json({ error: 'Failed to load agent configurations' })
+  }
+})
+
+/**
+ * PUT /api/agents/:agentId
+ * Update agent properties (e.g., LLM model)
+ */
+router.put('/agents/:agentId', async (req, res) => {
+  try {
+    const { agentId } = req.params
+    const { llmModel } = req.body
+
+    console.log('\n🔧 [DEBUG] PUT /api/agents/:agentId received')
+    console.log('🔧 [DEBUG] agentId:', agentId)
+    console.log('🔧 [DEBUG] llmModel:', llmModel)
+    console.log('🔧 [DEBUG] Agents store size:', agentsStore.length)
+
+    if (!llmModel) {
+      console.log('🔧 [DEBUG] Validation failed: missing llmModel')
+      return res.status(400).json({ error: 'Missing required field: llmModel' })
+    }
+
+    // Find and update agent
+    const agentIndex = agentsStore.findIndex(a => a.id === agentId)
+    
+    console.log('🔧 [DEBUG] Found agent at index:', agentIndex)
+    
+    if (agentIndex === -1) {
+      console.log('🔧 [DEBUG] Agent not found in store')
+      console.log('🔧 [DEBUG] Available agent IDs:', agentsStore.map(a => a.id))
+      return res.status(404).json({ error: 'Agent not found' })
+    }
+
+    const oldModel = agentsStore[agentIndex].llmModel
+    console.log(`🔧 [DEBUG] Updating agent ${agentId}:`, { from: oldModel, to: llmModel })
+    
+    agentsStore[agentIndex].llmModel = llmModel
+    await saveAgents()
+
+    console.log(`✅ [Update Agent] ${agentId}: Model changed from ${oldModel} to ${llmModel}`)
+
+    res.json({ 
+      success: true,
+      agent: agentsStore[agentIndex],
+      message: `LLM model updated from ${oldModel} to ${llmModel}`
+    })
+  } catch (error) {
+    console.error('❌ Agent update error:', error)
+    console.log('🔧 [DEBUG] Error stack:', (error as any)?.stack)
+    res.status(500).json({ error: 'Failed to update agent', details: (error as any)?.message })
+  }
+})
+
+/**
+ * PATCH /api/agents/:agentId/edit
+ * Edit agent properties (name, skills, llmModel, personality, etc.)
+ */
+router.patch('/agents/:agentId/edit', async (req, res) => {
+  try {
+    const { agentId } = req.params
+    const updates = req.body
+
+    console.log(`\n✏️  [Edit Agent] Agent: ${agentId}`)
+    console.log(`✏️  [Edit Agent] Updates:`, JSON.stringify(updates, null, 2))
+
+    // Validate the update data
+    const validation = validateAgentData(updates)
+    if (!validation.valid) {
+      console.log('❌ [Edit Agent] Validation failed:', validation.errors)
+      return res.status(400).json({ 
+        error: 'Invalid agent data', 
+        details: validation.errors 
+      })
+    }
+
+    // Apply edits using the service function
+    const updatedAgent = await editAgent(agentsStore, agentId, updates)
+
+    if (!updatedAgent) {
+      console.log('❌ [Edit Agent] Agent not found')
+      return res.status(404).json({ error: 'Agent not found' })
+    }
+
+    // Save changes to file
+    await saveAgents()
+
+    console.log(`✅ [Edit Agent] Successfully updated agent ${agentId}`)
+
+    res.json({
+      success: true,
+      agent: updatedAgent,
+      message: 'Agent updated successfully'
+    })
+  } catch (error) {
+    console.error('❌ [Edit Agent] Error:', error)
+    res.status(500).json({ 
+      error: 'Failed to edit agent', 
+      details: error instanceof Error ? error.message : 'Unknown error' 
+    })
+  }
+})
+
+/**
+ * PATCH /api/agents/:agentId/llm-model
+ * Update only the LLM model
+ */
+router.patch('/agents/:agentId/llm-model', async (req, res) => {
+  try {
+    const { agentId } = req.params
+    const { llmModel } = req.body
+
+    if (!llmModel) {
+      return res.status(400).json({ error: 'LLM model is required' })
+    }
+
+    console.log(`\n🤖 [Update LLM] Agent: ${agentId}, Model: ${llmModel}`)
+
+    const updatedAgent = await updateAgentLLMModel(agentsStore, agentId, llmModel)
+
+    if (!updatedAgent) {
+      return res.status(404).json({ error: 'Agent not found' })
+    }
+
+    await saveAgents()
+
+    res.json({
+      success: true,
+      agent: updatedAgent,
+      message: `LLM model updated to ${llmModel}`
+    })
+  } catch (error) {
+    console.error('❌ [Update LLM] Error:', error)
+    res.status(500).json({ error: 'Failed to update LLM model' })
+  }
+})
+
+/**
+ * PATCH /api/agents/:agentId/skills
+ * Update agent skills
+ */
+router.patch('/agents/:agentId/skills', async (req, res) => {
+  try {
+    const { agentId } = req.params
+    const { skills, action } = req.body // action: 'add', 'remove', 'replace'
+
+    console.log(`\n⚡ [Update Skills] Agent: ${agentId}, Action: ${action}`)
+
+    let updatedAgent = agentsStore.find(a => a.id === agentId)
+
+    if (!updatedAgent) {
+      return res.status(404).json({ error: 'Agent not found' })
+    }
+
+    if (action === 'add' && skills) {
+      for (const skill of skills) {
+        updatedAgent = await addAgentSkill(agentsStore, agentId, skill)
+      }
+    } else if (action === 'remove' && skills) {
+      for (const skill of skills) {
+        updatedAgent = await removeAgentSkill(agentsStore, agentId, skill)
+      }
+    } else if (action === 'replace' && skills) {
+      updatedAgent = await updateAgentSkills(agentsStore, agentId, skills)
+    }
+
+    await saveAgents()
+
+    res.json({
+      success: true,
+      agent: updatedAgent,
+      message: `Skills ${action}ed successfully`
+    })
+  } catch (error) {
+    console.error('❌ [Update Skills] Error:', error)
+    res.status(500).json({ error: 'Failed to update skills' })
+  }
+})
+
+/**
+ * GET /api/agents/:agentId/edit-fields
+ * Get all editable fields for an agent
+ */
+router.get('/agents/:agentId/edit-fields', async (req, res) => {
+  try {
+    const { agentId } = req.params
+
+    const agent = agentsStore.find(a => a.id === agentId)
+
+    if (!agent) {
+      return res.status(404).json({ error: 'Agent not found' })
+    }
+
+    const editableFields = getEditableFields(agent)
+
+    res.json({
+      agentId,
+      editableFields,
+      availableLLMModels: [
+        { id: 'openai/gpt-3.5-turbo', name: 'GPT-3.5 Turbo' },
+        { id: 'openai/gpt-4', name: 'GPT-4' },
+        { id: 'openai/gpt-4-turbo', name: 'GPT-4 Turbo' },
+        { id: 'anthropic/claude-3-opus', name: 'Claude 3 Opus' },
+        { id: 'anthropic/claude-3-sonnet', name: 'Claude 3 Sonnet' },
+        { id: 'meta-llama/llama-2-7b-chat', name: 'Llama 2 7B' },
+        { id: 'microsoft/wizardlm-2-8x22b', name: 'WizardLM 2' }
+      ]
+    })
+  } catch (error) {
+    console.error('❌ Error fetching edit fields:', error)
+    res.status(500).json({ error: 'Failed to fetch edit fields' })
   }
 })
 

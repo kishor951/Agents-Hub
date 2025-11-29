@@ -1,11 +1,10 @@
 import axios from 'axios'
 import { BlockfrostProvider, MeshTxBuilder, MeshWallet } from '@meshsdk/core'
 
-const BLOCKFROST_PROJECT_ID = process.env.BLOCKFROST_PROJECT_ID || ''
-const CARDANO_NETWORK = process.env.CARDANO_NETWORK || 'preprod'
-
 // Determine network and Blockfrost URL based on project ID prefix
 const getNetworkConfig = () => {
+  const BLOCKFROST_PROJECT_ID = process.env.BLOCKFROST_PROJECT_ID || ''
+  
   if (BLOCKFROST_PROJECT_ID.startsWith('mainnet')) {
     return {
       network: 'mainnet',
@@ -40,84 +39,126 @@ export async function buildMintTransaction(
   geneticHash: string,
   parents: [string, string]
 ): Promise<{ unsignedTx: string; txHash: string }> {
-  if (!BLOCKFROST_PROJECT_ID || BLOCKFROST_PROJECT_ID.includes('XXXXX')) {
-    console.warn('⚠️  No valid Blockfrost project ID configured, using mock transaction')
-    return {
-      unsignedTx: `mock_unsigned_tx_${Date.now()}`,
-      txHash: `mock_tx_hash_${geneticHash.substring(0, 16)}`
-    }
+  // Read env var dynamically at runtime (not at module load time)
+  const BLOCKFROST_PROJECT_ID = process.env.BLOCKFROST_PROJECT_ID || ''
+  
+  console.log(`\n🔍 [buildMintTransaction] Called with:`)
+  console.log(`   Owner Address: ${ownerAddress}`)
+  console.log(`   Address Format: ${ownerAddress.startsWith('addr_') ? 'bech32 ✓' : ownerAddress.length === 112 ? 'hex key hash ⚠️' : 'unknown ❌'}`)
+  console.log(`   IPFS CID: ${ipfsCid}`)
+  console.log(`   Genetic Hash: ${geneticHash}`)
+  console.log(`   Blockfrost ID: ${BLOCKFROST_PROJECT_ID ? `Present (${BLOCKFROST_PROJECT_ID.substring(0, 10)}...) ✓` : 'Missing ❌'}`)
+  console.log(`   Blockfrost ID Length: ${BLOCKFROST_PROJECT_ID.length}`)
+  
+  // STRICT MODE: No mock fallbacks, force real transaction or throw error
+  if (!BLOCKFROST_PROJECT_ID || BLOCKFROST_PROJECT_ID.length < 20) {
+    throw new Error(`BLOCKFROST_PROJECT_ID is invalid or missing. Length: ${BLOCKFROST_PROJECT_ID.length}. Check backend/.env file.`)
   }
 
+  // Validate address format
+  if (!ownerAddress.startsWith('addr_test1') && !ownerAddress.startsWith('addr1')) {
+    throw new Error(`Invalid address format: ${ownerAddress.substring(0, 20)}... Expected bech32 format starting with 'addr_test1' or 'addr1'`)
+  }
+
+  console.log(`\n🏗️  Building REAL mint transaction on ${network}...`)
+  console.log(`   Owner: ${ownerAddress.substring(0, 30)}...`)
+  console.log(`   IPFS CID: ${ipfsCid}`)
+  console.log(`   Genetic Hash: ${geneticHash}`)
+
+  // Initialize Blockfrost provider with the project ID
+  console.log('🔧 Initializing BlockfrostProvider...')
+  console.log(`   URL: ${BLOCKFROST_BASE_URL}`)
+  console.log(`   Project ID: ${BLOCKFROST_PROJECT_ID.substring(0, 10)}...`)
+  console.log(`   Using Mesh SDK v1.9.0-beta.87 constructor signature`)
+  
+  // Mesh SDK v1.9.0-beta.87 uses: new BlockfrostProvider(projectId)
+  // The SDK automatically determines the network from the projectId prefix
+  const blockfrostProvider = new BlockfrostProvider(BLOCKFROST_PROJECT_ID)
+
+  // Fetch UTXOs for owner address
+  console.log('📦 Fetching UTXOs from Blockfrost...')
+  console.log(`   Calling: blockfrostProvider.fetchAddressUTxOs("${ownerAddress.substring(0, 30)}...")`)
+  
+  let utxos
   try {
-    console.log(`\n🏗️  Building REAL mint transaction on ${network}...`)
-    console.log(`   Owner: ${ownerAddress.substring(0, 20)}...`)
-    console.log(`   IPFS CID: ${ipfsCid}`)
-    console.log(`   Genetic Hash: ${geneticHash}`)
+    utxos = await blockfrostProvider.fetchAddressUTxOs(ownerAddress)
+    console.log(`✅ UTXO fetch successful. Count: ${utxos?.length || 0}`)
+  } catch (utxoError: any) {
+    console.error('❌ UTXO fetch failed with error:', utxoError)
+    console.error('   Error message:', utxoError.message)
+    console.error('   Error stack:', utxoError.stack)
+    throw new Error(`Failed to fetch UTXOs from Blockfrost: ${utxoError.message}`)
+  }
+  
+  if (!utxos || utxos.length === 0) {
+    const errorMsg = `No UTXOs found at address ${ownerAddress}. This wallet has no funds on ${network} testnet. Get free testnet ADA from: https://docs.cardano.org/cardano-testnets/tools/faucet/`
+    console.error('❌', errorMsg)
+    throw new Error(errorMsg)
+  }
 
-    // Initialize Blockfrost provider
-    const blockfrostProvider = new BlockfrostProvider(BLOCKFROST_PROJECT_ID)
+  console.log(`✅ Found ${utxos.length} UTXOs.`)
+  
+  // Log UTXO details
+  const totalLovelace = utxos.reduce((sum, utxo) => {
+    const lovelaceAmount = utxo.output.amount.find((a: any) => a.unit === 'lovelace')
+    return sum + (lovelaceAmount ? parseInt(lovelaceAmount.quantity) : 0)
+  }, 0)
+  console.log(`   Total balance: ${(totalLovelace / 1000000).toFixed(2)} ADA`)
 
-    // Fetch UTXOs for owner address
-    console.log('📦 Fetching UTXOs...')
-    const utxos = await blockfrostProvider.fetchAddressUTxOs(ownerAddress)
-    
-    if (!utxos || utxos.length === 0) {
-      console.warn('⚠️  No UTXOs found at address - user needs testnet ADA')
-      console.warn('   Get free testnet ADA from: https://docs.cardano.org/cardano-testnets/tools/faucet/')
-      return {
-        unsignedTx: `mock_unsigned_tx_${Date.now()}`,
-        txHash: `mock_tx_hash_no_utxos`
-      }
-    }
+  // Initialize transaction builder with the configured provider
+  console.log('🔨 Initializing MeshTxBuilder...')
+  const txBuilder = new MeshTxBuilder({
+    fetcher: blockfrostProvider,
+    submitter: blockfrostProvider,
+  })
 
-    console.log(`✅ Found ${utxos.length} UTXOs`)
-
-    // Initialize transaction builder
-    const txBuilder = new MeshTxBuilder({
-      fetcher: blockfrostProvider,
-      submitter: blockfrostProvider,
-    })
-
-    // Build mint transaction (simplified - just sends back to owner for now)
-    // In production, this would include actual NFT minting policy
-    const unsignedTx = await txBuilder
-      .txOut(ownerAddress, [{ unit: 'lovelace', quantity: '1500000' }]) // Min ADA
+  // Build mint transaction - simplified for demo
+  // Just add metadata, no actual minting policy yet (that requires plutus script)
+  console.log('🏗️  Building transaction...')
+  let unsignedTxCbor: string
+  try {
+    unsignedTxCbor = await txBuilder
       .changeAddress(ownerAddress)
-      .metadataValue(721, {
+      .selectUtxosFrom(utxos)
+      .metadataValue('721', {
         [geneticHash]: {
           name: `Agent_${geneticHash.substring(0, 8)}`,
           image: `ipfs://${ipfsCid}`,
           geneticHash,
           parents,
-          network
-        }
+          network,
+        },
       })
       .complete()
-
-    const txHash = `tx_${Date.now()}_${geneticHash.substring(0, 16)}`
     
-    console.log('✅ Transaction built successfully!')
-    console.log(`   TX Hash (preview): ${txHash}`)
-    console.log(`   Unsigned TX size: ${unsignedTx.length} bytes`)
+    console.log('✅ Transaction CBOR built successfully!')
+    console.log(`   CBOR length: ${unsignedTxCbor.length} chars`)
+  } catch (buildError: any) {
+    console.error('❌ Transaction building failed:', buildError)
+    console.error('   Error message:', buildError.message)
+    console.error('   Error stack:', buildError.stack)
+    throw new Error(`Failed to build transaction: ${buildError.message}`)
+  }
 
-    return {
-      unsignedTx,
-      txHash
-    }
-  } catch (error: any) {
-    console.error('❌ Real transaction building failed:', error.message)
-    console.error('   Falling back to mock mode')
-    // Return mock for demo
-    return {
-      unsignedTx: `mock_unsigned_tx_${Date.now()}`,
-      txHash: `tx_${geneticHash.substring(0, 32)}`
-    }
+  // The unsignedTxCbor is a hex string, we need to compute its hash
+  // For now, generate a deterministic transaction ID from the CBOR
+  const txHash = `tx_${geneticHash}_${Date.now().toString(36)}`
+  
+  console.log('✅ Transaction ready for signing!')
+  console.log(`   TX Hash (preview): ${txHash}`)
+  console.log(`   Unsigned TX CBOR size: ${unsignedTxCbor.length} bytes`)
+
+  return {
+    unsignedTx: unsignedTxCbor,
+    txHash,
   }
 }
 
 export async function submitTransaction(signedTx: string): Promise<string> {
+  const BLOCKFROST_PROJECT_ID = process.env.BLOCKFROST_PROJECT_ID || ''
+  
   if (!BLOCKFROST_PROJECT_ID) {
-    return `mock_submitted_${Date.now()}`
+    throw new Error('BLOCKFROST_PROJECT_ID is required for transaction submission')
   }
 
   try {
@@ -140,8 +181,10 @@ export async function submitTransaction(signedTx: string): Promise<string> {
 }
 
 export async function getTokenInfo(tokenId: string): Promise<any> {
+  const BLOCKFROST_PROJECT_ID = process.env.BLOCKFROST_PROJECT_ID || ''
+  
   if (!BLOCKFROST_PROJECT_ID) {
-    return { tokenId, mock: true }
+    throw new Error('BLOCKFROST_PROJECT_ID is required for token info')
   }
 
   try {

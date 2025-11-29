@@ -118,30 +118,45 @@ const CreateAgent = ({ walletAddress, onAgentCreated, onStartBreeding }: CreateA
       const createdAgent = response.data.agent
       setCreatedAgent(createdAgent)
 
+      console.log('📦 Agent created:', createdAgent)
+      console.log('💳 Mint TX data:', response.data.mintTx)
+
       if (response.data.mintTx) {
         console.log('🎁 Mint transaction ready:', response.data.mintTx.txHash)
         setPendingMintTx(response.data.mintTx)
+        
+        // Step 5: Complete
+        setProgressStep('complete')
+        
+        // Close progress modal after a short delay to show the mint modal
+        setTimeout(() => {
+          setShowProgress(false)
+        }, 1000)
+        
+        // DON'T reset form or reload agents yet - wait for minting
+      } else {
+        console.log('⚠️ No mint transaction returned from backend')
+        
+        // Step 5: Complete
+        setProgressStep('complete')
+
+        // Reset form
+        setFormData({
+          name: '',
+          purpose: '',
+          instructions: '',
+          personality: '',
+          skills: '',
+          llmModel: 'x-ai/grok-4.1-fast:free',
+          picture: null
+        })
+
+        // Reload agents after creation
+        setTimeout(() => {
+          loadUserAgents()
+          onAgentCreated(createdAgent)
+        }, 1500)
       }
-
-      // Step 5: Complete
-      setProgressStep('complete')
-
-      // Reset form
-      setFormData({
-        name: '',
-        purpose: '',
-        instructions: '',
-        personality: '',
-        skills: '',
-        llmModel: 'x-ai/grok-4.1-fast:free',
-        picture: null
-      })
-
-      // Reload agents after creation
-      setTimeout(() => {
-        loadUserAgents()
-        onAgentCreated(createdAgent)
-      }, 1500)
 
     } catch (error: any) {
       console.error('Failed to create agent:', error)
@@ -183,11 +198,14 @@ const CreateAgent = ({ walletAddress, onAgentCreated, onStartBreeding }: CreateA
 
       {/* Mint Transaction Confirmation Modal */}
       {pendingMintTx && createdAgent && (
-        <div className="modal-overlay">
+        <div className="modal-overlay" style={{ zIndex: 9999 }}>
           <div className="modal-content mint-modal">
             <div className="modal-header">
               <h2>🎉 Agent Created! Ready to Mint NFT</h2>
               <p>Your agent "{createdAgent.name}" has been created and is ready to become an NFT.</p>
+              <p style={{ fontSize: '12px', color: '#888', marginTop: '8px' }}>
+                Debug: Modal is visible. TX: {pendingMintTx.txHash}
+              </p>
             </div>
 
             <div className="mint-details">
@@ -240,15 +258,21 @@ const CreateAgent = ({ walletAddress, onAgentCreated, onStartBreeding }: CreateA
 
                     console.log(`✅ Connected to ${walletName} wallet`)
 
-                    // Sign the transaction
-                    console.log('📝 Signing transaction...')
-                    const signedTx = await walletApi.signTx(pendingMintTx.unsignedTx, true)
-                    console.log('✅ Transaction signed!')
+                    // Sign the transaction (CIP-30: partial=false returns complete signed tx)
+                    console.log('📝 Signing transaction with wallet...')
+                    console.log('   Unsigned TX length:', pendingMintTx.unsignedTx.length)
+                    console.log('   Unsigned TX (first 100 chars):', pendingMintTx.unsignedTx.substring(0, 100))
+                    
+                    // Set partial=false to get the complete signed transaction (not just witnesses)
+                    const signedTxCbor = await walletApi.signTx(pendingMintTx.unsignedTx, false)
+                    console.log('✅ Transaction signed by wallet!')
+                    console.log('   Signed TX length:', signedTxCbor.length)
+                    console.log('   Signed TX (first 100 chars):', signedTxCbor.substring(0, 100))
 
                     // Submit to blockchain via backend
                     console.log('📤 Submitting to blockchain...')
                     const response = await axios.post('http://localhost:5000/api/submit-tx', {
-                      signedTx
+                      signedTx: signedTxCbor
                     })
 
                     console.log('✅ Transaction submitted!', response.data)

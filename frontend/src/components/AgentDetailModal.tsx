@@ -1,5 +1,13 @@
 import { useState } from 'react'
 import { Agent } from '../types'
+import axios from 'axios'
+
+interface ChatMessage {
+  id: string
+  sender: 'user' | 'agent'
+  text: string
+  timestamp: Date
+}
 
 interface AgentDetailModalProps {
   agent: Agent & { fullData?: any }
@@ -11,6 +19,9 @@ interface AgentDetailModalProps {
 
 const AgentDetailModal = ({ agent, isOpen, onClose, isSelected, onSelect }: AgentDetailModalProps) => {
   const [activeTab, setActiveTab] = useState<'info' | 'chat' | 'breed'>('info')
+  const [messages, setMessages] = useState<ChatMessage[]>([])
+  const [inputValue, setInputValue] = useState('')
+  const [loading, setLoading] = useState(false)
 
   if (!isOpen) return null
 
@@ -19,6 +30,59 @@ const AgentDetailModal = ({ agent, isOpen, onClose, isSelected, onSelect }: Agen
   const specialization = fullData.specialization || {}
   const capabilities = fullData.capabilities || {}
   const skills = fullData.skills || {}
+
+  const handleSendMessage = async () => {
+    if (!inputValue.trim()) return
+
+    // Add user message
+    const userMessage: ChatMessage = {
+      id: `msg_${Date.now()}`,
+      sender: 'user',
+      text: inputValue,
+      timestamp: new Date()
+    }
+    setMessages(prev => [...prev, userMessage])
+    setInputValue('')
+    setLoading(true)
+
+    try {
+      // Send to backend
+      const response = await axios.post('http://localhost:5000/api/agent/query', {
+        tokenId: agent.id,
+        agentName: agent.name,
+        query: inputValue,
+        personaPrompt: agent.instructions || personality.tone || '',
+        skills: agent.skills || []
+      })
+
+      // Add agent response
+      const agentMessage: ChatMessage = {
+        id: `msg_${Date.now()}_response`,
+        sender: 'agent',
+        text: response.data.response,
+        timestamp: new Date()
+      }
+      setMessages(prev => [...prev, agentMessage])
+    } catch (error: any) {
+      console.error('Chat error:', error)
+      const errorMessage: ChatMessage = {
+        id: `msg_${Date.now()}_error`,
+        sender: 'agent',
+        text: `Sorry, I encountered an error: ${error.message}. Please try again.`,
+        timestamp: new Date()
+      }
+      setMessages(prev => [...prev, errorMessage])
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleKeyPress = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter' && !e.shiftKey && !loading) {
+      e.preventDefault()
+      handleSendMessage()
+    }
+  }
 
   return (
     <>
@@ -177,14 +241,74 @@ const AgentDetailModal = ({ agent, isOpen, onClose, isSelected, onSelect }: Agen
 
           {activeTab === 'chat' && (
             <div className="chat-tab">
-              <div className="chat-placeholder">
-                <p className="chat-icon">💬</p>
-                <h4>Chat with {agent.name}</h4>
-                <p>Coming soon! You'll be able to chat with this agent and test their capabilities.</p>
-                <div className="chat-example">
-                  <p><strong>Example interaction:</strong></p>
-                  <p>"How would you approach optimizing this React component?"</p>
-                </div>
+              <div className="chat-messages">
+                {messages.length === 0 ? (
+                  <div className="chat-welcome">
+                    <p className="chat-icon">💬</p>
+                    <h4>Chat with {agent.name}</h4>
+                    <p className="chat-description">{agent.instructions || 'Ask me anything about my specialization!'}</p>
+                    <div className="chat-hints">
+                      <p><strong>Tips:</strong></p>
+                      <ul>
+                        <li>Ask questions based on my skills: {(agent.skills || []).slice(0, 2).join(', ')}</li>
+                        <li>I'll respond based on my expertise and personality</li>
+                        <li>Press Enter to send, or Shift+Enter for new line</li>
+                      </ul>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="messages-list">
+                    {messages.map(msg => (
+                      <div key={msg.id} className={`message ${msg.sender}`}>
+                        <div className="message-avatar">
+                          {msg.sender === 'user' ? '👤' : agent.imageUrl?.startsWith('http') ? (
+                            <img src={agent.imageUrl} alt={agent.name} />
+                          ) : (
+                            agent.imageUrl || '🤖'
+                          )}
+                        </div>
+                        <div className="message-content">
+                          <div className="message-sender">
+                            {msg.sender === 'user' ? 'You' : agent.name}
+                          </div>
+                          <div className="message-text">{msg.text}</div>
+                          <div className="message-time">
+                            {msg.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                    {loading && (
+                      <div className="message agent typing">
+                        <div className="message-avatar">🤖</div>
+                        <div className="message-content">
+                          <div className="typing-indicator">
+                            <span></span><span></span><span></span>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+
+              <div className="chat-input-area">
+                <textarea
+                  className="chat-input"
+                  placeholder={`Ask ${agent.name}...`}
+                  value={inputValue}
+                  onChange={(e) => setInputValue(e.target.value)}
+                  onKeyPress={handleKeyPress}
+                  disabled={loading}
+                  rows={2}
+                />
+                <button
+                  className="chat-send-btn"
+                  onClick={handleSendMessage}
+                  disabled={loading || !inputValue.trim()}
+                >
+                  {loading ? '⏳ ...' : '📤 Send'}
+                </button>
               </div>
             </div>
           )}
@@ -523,47 +647,274 @@ const AgentDetailModal = ({ agent, isOpen, onClose, isSelected, onSelect }: Agen
         .chat-tab,
         .breed-tab {
           display: flex;
-          justify-content: center;
-          align-items: center;
-          min-height: 300px;
+          flex-direction: column;
+          justify-content: flex-start;
+          min-height: 400px;
+          padding: 0;
         }
 
-        .chat-placeholder,
+        .chat-tab {
+          padding: 1.5rem;
+        }
+
+        .chat-messages {
+          flex: 1;
+          overflow-y: auto;
+          margin-bottom: 1rem;
+          min-height: 250px;
+          max-height: 350px;
+          padding: 1rem;
+          background: rgba(0, 0, 0, 0.2);
+          border-radius: 8px;
+          display: flex;
+          flex-direction: column;
+        }
+
+        .chat-welcome {
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          justify-content: center;
+          text-align: center;
+          padding: 2rem;
+        }
+
+        .chat-welcome .chat-icon {
+          font-size: 3rem;
+          margin-bottom: 1rem;
+        }
+
+        .chat-welcome h4 {
+          margin: 0 0 0.5rem 0;
+          color: #fff;
+          font-size: 1.2rem;
+        }
+
+        .chat-description {
+          color: #aaa;
+          margin-bottom: 1.5rem;
+          font-style: italic;
+        }
+
+        .chat-hints {
+          background: rgba(100, 200, 255, 0.1);
+          border: 1px solid rgba(100, 200, 255, 0.3);
+          padding: 1rem;
+          border-radius: 8px;
+          text-align: left;
+        }
+
+        .chat-hints p {
+          color: #fff;
+          margin: 0 0 0.5rem 0;
+          font-weight: 600;
+        }
+
+        .chat-hints ul {
+          margin: 0.5rem 0 0 0;
+          padding-left: 1.5rem;
+          color: #ddd;
+          font-size: 0.9rem;
+        }
+
+        .chat-hints li {
+          margin: 0.3rem 0;
+        }
+
+        .messages-list {
+          display: flex;
+          flex-direction: column;
+          gap: 1rem;
+        }
+
+        .message {
+          display: flex;
+          gap: 0.8rem;
+          animation: slideIn 0.3s ease;
+        }
+
+        @keyframes slideIn {
+          from {
+            opacity: 0;
+            transform: translateY(10px);
+          }
+          to {
+            opacity: 1;
+            transform: translateY(0);
+          }
+        }
+
+        .message.user {
+          flex-direction: row-reverse;
+        }
+
+        .message-avatar {
+          width: 32px;
+          height: 32px;
+          min-width: 32px;
+          border-radius: 50%;
+          background: rgba(100, 200, 255, 0.2);
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          font-size: 1.2rem;
+          overflow: hidden;
+        }
+
+        .message-avatar img {
+          width: 100%;
+          height: 100%;
+          object-fit: cover;
+        }
+
+        .message-content {
+          flex: 1;
+          max-width: 70%;
+        }
+
+        .message.user .message-content {
+          align-items: flex-end;
+          display: flex;
+          flex-direction: column;
+        }
+
+        .message-sender {
+          font-size: 0.75rem;
+          color: #aaa;
+          margin-bottom: 0.2rem;
+          font-weight: 600;
+        }
+
+        .message-text {
+          background: rgba(100, 200, 255, 0.1);
+          border: 1px solid rgba(100, 200, 255, 0.2);
+          padding: 0.8rem;
+          border-radius: 8px;
+          color: #ddd;
+          word-wrap: break-word;
+          line-height: 1.5;
+        }
+
+        .message.user .message-text {
+          background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+          border: none;
+          color: #fff;
+        }
+
+        .message-time {
+          font-size: 0.7rem;
+          color: #888;
+          margin-top: 0.3rem;
+        }
+
+        .typing-indicator {
+          display: flex;
+          gap: 4px;
+          padding: 0.5rem 0.8rem;
+        }
+
+        .typing-indicator span {
+          width: 8px;
+          height: 8px;
+          background: #667eea;
+          border-radius: 50%;
+          animation: typing 1.4s infinite;
+        }
+
+        .typing-indicator span:nth-child(2) {
+          animation-delay: 0.2s;
+        }
+
+        .typing-indicator span:nth-child(3) {
+          animation-delay: 0.4s;
+        }
+
+        @keyframes typing {
+          0%, 60%, 100% {
+            transform: translateY(0);
+            opacity: 0.5;
+          }
+          30% {
+            transform: translateY(-10px);
+            opacity: 1;
+          }
+        }
+
+        .chat-input-area {
+          display: flex;
+          gap: 0.8rem;
+          padding-top: 1rem;
+          border-top: 1px solid #444;
+        }
+
+        .chat-input {
+          flex: 1;
+          padding: 0.8rem;
+          background: rgba(0, 0, 0, 0.3);
+          border: 1px solid #444;
+          border-radius: 8px;
+          color: #fff;
+          font-family: inherit;
+          font-size: 0.9rem;
+          resize: vertical;
+          max-height: 100px;
+        }
+
+        .chat-input::placeholder {
+          color: #777;
+        }
+
+        .chat-input:focus {
+          outline: none;
+          border-color: #64c8ff;
+          background: rgba(100, 200, 255, 0.05);
+        }
+
+        .chat-input:disabled {
+          opacity: 0.5;
+          cursor: not-allowed;
+        }
+
+        .chat-send-btn {
+          padding: 0.8rem 1.5rem;
+          background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+          border: none;
+          border-radius: 8px;
+          color: white;
+          font-weight: 600;
+          cursor: pointer;
+          transition: all 0.2s;
+          font-size: 0.9rem;
+        }
+
+        .chat-send-btn:hover:not(:disabled) {
+          transform: translateY(-2px);
+          box-shadow: 0 10px 20px rgba(102, 126, 234, 0.4);
+        }
+
+        .chat-send-btn:disabled {
+          opacity: 0.5;
+          cursor: not-allowed;
+        }
+
+        .breed-placeholder,
         .breed-info {
           text-align: center;
         }
 
-        .chat-icon,
         .breed-icon {
           font-size: 3rem;
           margin: 0 0 1rem 0;
         }
 
-        .chat-placeholder h4,
         .breed-info h4 {
           margin: 0 0 0.5rem 0;
           color: #fff;
         }
 
-        .chat-placeholder p,
         .breed-info p {
           color: #aaa;
           margin: 0 0 1rem 0;
-        }
-
-        .chat-example {
-          background: rgba(100, 200, 255, 0.1);
-          padding: 1rem;
-          border-radius: 8px;
-          text-align: left;
-          max-width: 400px;
-          margin: 0 auto;
-        }
-
-        .chat-example p {
-          margin: 0.3rem 0;
-          font-size: 0.9rem;
-          color: #ddd;
         }
 
         .breed-benefits ul {

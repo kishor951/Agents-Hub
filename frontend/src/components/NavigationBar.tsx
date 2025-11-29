@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from 'react'
 import WalletConnect from './WalletConnect'
 
-type Screen = 'dashboard' | 'create' | 'breed' | 'child'
+type Screen = 'dashboard' | 'create' | 'breed' | 'child' | 'wallet-test'
 
 interface NavigationBarProps {
   walletAddress: string | null
@@ -84,6 +84,12 @@ const NavigationBar = ({ walletAddress, onConnect, onDisconnect, currentScreen, 
               onClick={() => onScreenChange('create')}
             >
               ✨ Create Agents
+            </button>
+            <button
+              className={`nav-tab ${currentScreen === 'wallet-test' ? 'active' : ''}`}
+              onClick={() => onScreenChange('wallet-test')}
+            >
+              🔍 Test Wallet
             </button>
           </div>
         )}

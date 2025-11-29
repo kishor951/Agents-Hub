@@ -27,17 +27,30 @@ const WalletConnect = ({ onConnect, onDisconnect }: WalletConnectProps) => {
   const connectWallet = async () => {
     setLoading(true)
     console.log('🔗 Starting wallet connection...')
+    console.log('🔍 Checking window.cardano:', typeof window.cardano, window.cardano)
+    
     try {
+      // Give wallets time to inject (sometimes takes a moment)
+      await new Promise(resolve => setTimeout(resolve, 100))
+      
       if (!window.cardano) {
-        alert('Please install a Cardano wallet (Nami, Eternl, or Lace)')
+        console.error('❌ window.cardano is not available')
+        console.log('💡 Please make sure:')
+        console.log('   1. Your wallet extension (Nami/Lace/Eternl) is installed')
+        console.log('   2. The extension is enabled in your browser')
+        console.log('   3. You have refreshed the page after installing')
+        alert('Please install a Cardano wallet (Nami, Eternl, or Lace)\n\nAfter installing, refresh this page.')
         setLoading(false)
         return
       }
 
+      console.log('📱 window.cardano found:', Object.keys(window.cardano))
       console.log('📱 Available wallets:', {
         nami: !!window.cardano.nami,
         eternl: !!window.cardano.eternl,
-        lace: !!window.cardano.lace
+        lace: !!window.cardano.lace,
+        flint: !!window.cardano.flint,
+        typhon: !!window.cardano.typhon
       })
 
       // Try Nami, Eternl, and Lace
@@ -70,26 +83,75 @@ const WalletConnect = ({ onConnect, onDisconnect }: WalletConnectProps) => {
       console.log('📮 Got addresses:', addresses?.length)
       
       if (addresses && addresses.length > 0) {
-        // Use first address (simplified for demo)
-        const addr = addresses[0]
-        console.log('📍 Selected address:', addr.substring(0, 20) + '...')
+        // CIP-30 wallets return hex-encoded CBOR addresses
+        const hexAddress = addresses[0]
+        console.log('📍 Raw address from wallet:', hexAddress.substring(0, 40) + '...')
+        
+        let bech32Address: string
+        
+        // Method 1: Check if it's already bech32
+        if (hexAddress.startsWith('addr_test1') || hexAddress.startsWith('addr1')) {
+          bech32Address = hexAddress
+          console.log('✅ Address is already in bech32 format')
+        } 
+        // Method 2: Manual conversion from hex payment key hash
+        else {
+          console.log('🔧 Converting hex address to bech32...')
+          
+          // Extract payment key hash from CBOR-encoded address
+          // Format: 00 (network) + 28 bytes payment key hash + optional stake key hash
+          const paymentKeyHash = hexAddress.startsWith('01') || hexAddress.startsWith('00') 
+            ? hexAddress.substring(2, 58) 
+            : hexAddress.substring(0, 56)
+          
+          console.log('🔑 Payment key hash:', paymentKeyHash)
+          
+          // Use backend to convert (it has proper libraries)
+          try {
+            const response = await fetch('http://localhost:5000/api/wallet/convert-address', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ 
+                hexAddress,
+                paymentKeyHash,
+                network: 'preprod'
+              })
+            })
+            
+            if (!response.ok) {
+              throw new Error('Backend conversion failed')
+            }
+            
+            const data = await response.json()
+            bech32Address = data.bech32Address
+            console.log('✅ Converted via backend:', bech32Address)
+          } catch (backendError) {
+            console.warn('⚠️ Backend conversion failed:', backendError)
+            
+            // Fallback: Use Demo Mode
+            console.log('💡 Using Demo Mode instead')
+            alert('Unable to convert wallet address automatically.\n\nUsing Demo Mode with a test address.\n\nThis is sufficient for testing the platform.')
+            bech32Address = 'addr_test1qz2fxv2umyhttkxyxp8x0dlpdt3k6cwng5pxj3jhsydzer3jcu5d8ps7zex2k2xt3uqxgjqnnj83ws8lhrn648jjxtwq2ytjqp'
+          }
+        }
         
         // Verify payment key hash via Mesh service
         try {
-          const keyHash = await meshCardanoService.getPaymentKeyHash(addr)
-          console.log('✅ Payment key hash verified:', keyHash)
+          const keyHash = await meshCardanoService.getPaymentKeyHash(bech32Address)
+          console.log('✅ Payment key hash verified:', keyHash.substring(0, 16) + '...')
         } catch (err) {
-          console.warn('⚠️ Could not verify key hash:', err)
+          console.warn('⚠️  Could not verify key hash:', err)
         }
         
         console.log('💾 Saving wallet data...')
-        setAddress(addr)
+        setAddress(bech32Address)
         setConnected(true)
-        localStorage.setItem('walletAddress', addr)
+        localStorage.setItem('walletAddress', bech32Address)
         localStorage.setItem('walletType', walletName)
         
         console.log('✅ Wallet connected successfully!')
-        onConnect(addr)
+        console.log(`   Address format: ${bech32Address.startsWith('addr_') ? 'bech32 ✓' : 'unknown ⚠️'}`)
+        onConnect(bech32Address)
       } else {
         const errorMsg = `No addresses found in ${walletName} wallet.
 

@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from 'react'
 import { Agent } from '../types'
+import AgentEditor from './AgentEditor'
 import axios from 'axios'
 
 interface AgentDetailProps {
@@ -14,19 +15,78 @@ interface ChatMessage {
   timestamp: Date
 }
 
-const AgentDetail = ({ agent, onBack }: AgentDetailProps) => {
+const AgentDetail = ({ agent: initialAgent, onBack }: AgentDetailProps) => {
+  const [agent, setAgent] = useState(initialAgent)
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [inputValue, setInputValue] = useState('')
   const [isLoading, setIsLoading] = useState(false)
+  const [editingModel, setEditingModel] = useState(false)
+  const [selectedModel, setSelectedModel] = useState(agent.llmModel || '')
+  const [isSavingModel, setIsSavingModel] = useState(false)
+  const [isEditorOpen, setIsEditorOpen] = useState(false)
   const messagesEndRef = useRef<HTMLDivElement>(null)
+
+
+  // Available LLM models
+  const availableModels = [
+    { id: 'openai/gpt-3.5-turbo', name: 'GPT-3.5 Turbo', provider: 'OpenAI' },
+    { id: 'openai/gpt-4', name: 'GPT-4', provider: 'OpenAI' },
+    { id: 'openai/gpt-4-turbo', name: 'GPT-4 Turbo', provider: 'OpenAI' },
+    { id: 'anthropic/claude-2', name: 'Claude 2', provider: 'Anthropic' },
+    { id: 'anthropic/claude-3-opus', name: 'Claude 3 Opus', provider: 'Anthropic' },
+    { id: 'meta-llama/llama-3.2-3b-instruct:free', name: 'Llama 3.2 3B (Free)', provider: 'Meta' },
+    { id: 'x-ai/grok-4.1-fast:free', name: 'Grok 4.1 Fast (Free)', provider: 'xAI' },
+    { id: 'microsoft/wizardlm-2-8x22b:free', name: 'WizardLM-2 (Free)', provider: 'Microsoft' },
+  ]
 
   // Scroll to bottom when new messages arrive
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages])
 
+  const handleSaveModel = async () => {
+    console.log('🔧 [DEBUG] handleSaveModel called')
+    console.log('🔧 [DEBUG] selectedModel:', selectedModel)
+    console.log('🔧 [DEBUG] agent.llmModel:', agent.llmModel)
+    console.log('🔧 [DEBUG] agent.id:', agent.id)
+    
+    if (selectedModel === agent.llmModel) {
+      console.log('🔧 [DEBUG] Model unchanged, closing edit mode')
+      setEditingModel(false)
+      return
+    }
+
+    setIsSavingModel(true)
+    try {
+      const updateUrl = `http://localhost:5000/api/agents/${agent.id}`
+      console.log('🔧 [DEBUG] Sending PUT request to:', updateUrl)
+      console.log('🔧 [DEBUG] Payload:', { llmModel: selectedModel })
+      
+      const response = await axios.put(updateUrl, {
+        llmModel: selectedModel
+      })
+      
+      console.log('🔧 [DEBUG] Response received:', response.data)
+      setAgent(prev => ({ ...prev, llmModel: selectedModel }))
+      setEditingModel(false)
+      console.log('✅ Agent LLM model updated successfully to:', selectedModel)
+    } catch (error: any) {
+      console.error('❌ Failed to update model:', error)
+      console.log('🔧 [DEBUG] Error response:', error.response?.data)
+      console.log('🔧 [DEBUG] Error status:', error.response?.status)
+      alert('Failed to update LLM model. Please try again.')
+      setSelectedModel(agent.llmModel || '')
+    } finally {
+      setIsSavingModel(false)
+    }
+  }
+
   const handleSendMessage = async () => {
     if (!inputValue.trim()) return
+
+    console.log('💬 [DEBUG] Sending message...')
+    console.log('💬 [DEBUG] Agent:', { id: agent.id, name: agent.name, llmModel: agent.llmModel })
+    console.log('💬 [DEBUG] Query:', inputValue)
 
     const userMessage: ChatMessage = {
       id: Date.now().toString(),
@@ -41,18 +101,24 @@ const AgentDetail = ({ agent, onBack }: AgentDetailProps) => {
     setIsLoading(true)
 
     try {
+      const queryUrl = `http://localhost:5000/api/agent/query`
+      const queryPayload = {
+        tokenId: agent.id,
+        agentName: agent.name,
+        query: inputValue,
+        personaPrompt: agent.personality || agent.purpose || '',
+        skills: agent.skills || [],
+        llmModel: agent.llmModel
+      }
+      
+      console.log('💬 [DEBUG] POST to:', queryUrl)
+      console.log('💬 [DEBUG] Payload:', queryPayload)
+      
       // Call backend API to get agent response
-      const response = await axios.post(`http://localhost:5000/api/chat`, {
-        agentId: agent.id,
-        message: inputValue,
-        context: {
-          name: agent.name,
-          purpose: agent.purpose,
-          personality: agent.personality,
-          skills: agent.skills,
-        }
-      })
-
+      const response = await axios.post(queryUrl, queryPayload)
+      
+      console.log('💬 [DEBUG] Response received:', response.data)
+      
       const assistantMessage: ChatMessage = {
         id: (Date.now() + 1).toString(),
         role: 'assistant',
@@ -60,9 +126,13 @@ const AgentDetail = ({ agent, onBack }: AgentDetailProps) => {
         timestamp: new Date(),
       }
 
+      console.log('💬 [DEBUG] Added assistant message:', assistantMessage)
       setMessages(prev => [...prev, assistantMessage])
-    } catch (error) {
-      console.error('Chat error:', error)
+    } catch (error: any) {
+      console.error('❌ Chat error:', error)
+      console.log('💬 [DEBUG] Error response:', error.response?.data)
+      console.log('💬 [DEBUG] Error status:', error.response?.status)
+      console.log('💬 [DEBUG] Error message:', error.message)
       const errorMessage: ChatMessage = {
         id: (Date.now() + 2).toString(),
         role: 'assistant',
@@ -83,7 +153,13 @@ const AgentDetail = ({ agent, onBack }: AgentDetailProps) => {
           ← Back
         </button>
         <h1>{agent.name}</h1>
-        <div className="header-spacer" />
+        <button 
+          className="edit-agent-btn"
+          onClick={() => setIsEditorOpen(true)}
+          title="Edit agent properties"
+        >
+          ✏️ Edit
+        </button>
       </div>
 
       {/* Agent Banner */}
@@ -245,7 +321,51 @@ const AgentDetail = ({ agent, onBack }: AgentDetailProps) => {
                 {agent.llmModel && (
                   <div className="meta-row">
                     <span className="meta-label">LLM Model:</span>
-                    <span className="meta-value">{agent.llmModel}</span>
+                    {editingModel ? (
+                      <div className="model-edit-container">
+                        <select
+                          value={selectedModel}
+                          onChange={(e) => setSelectedModel(e.target.value)}
+                          className="model-select"
+                        >
+                          {availableModels.map(model => (
+                            <option key={model.id} value={model.id}>
+                              {model.name} ({model.provider})
+                            </option>
+                          ))}
+                        </select>
+                        <button
+                          className="save-model-btn"
+                          onClick={handleSaveModel}
+                          disabled={isSavingModel}
+                        >
+                          {isSavingModel ? '💾...' : '✓ Save'}
+                        </button>
+                        <button
+                          className="cancel-model-btn"
+                          onClick={() => {
+                            setEditingModel(false)
+                            setSelectedModel(agent.llmModel || '')
+                          }}
+                          disabled={isSavingModel}
+                        >
+                          ✕ Cancel
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="model-display-container">
+                        <span className="meta-value">{agent.llmModel}</span>
+                        <button
+                          className="edit-model-btn"
+                          onClick={() => {
+                            setEditingModel(true)
+                            setSelectedModel(agent.llmModel || '')
+                          }}
+                        >
+                          ✎ Edit
+                        </button>
+                      </div>
+                    )}
                   </div>
                 )}
                 {agent.generation && (
@@ -308,6 +428,25 @@ const AgentDetail = ({ agent, onBack }: AgentDetailProps) => {
           background: rgba(139, 92, 246, 0.2);
           border-color: rgba(139, 92, 246, 0.5);
           color: #e2e8f0;
+        }
+
+        .edit-agent-btn {
+          background: rgba(139, 92, 246, 0.1);
+          border: 1px solid rgba(139, 92, 246, 0.3);
+          color: #cbd5e1;
+          padding: 0.5rem 1rem;
+          border-radius: 6px;
+          cursor: pointer;
+          font-weight: 600;
+          transition: all 0.2s;
+          white-space: nowrap;
+        }
+
+        .edit-agent-btn:hover {
+          background: rgba(139, 92, 246, 0.2);
+          border-color: rgba(139, 92, 246, 0.5);
+          color: #e2e8f0;
+          box-shadow: 0 0 12px rgba(139, 92, 246, 0.2);
         }
 
         .agent-detail-header h1 {
@@ -818,6 +957,86 @@ const AgentDetail = ({ agent, onBack }: AgentDetailProps) => {
           border-radius: 3px;
         }
 
+        .model-display-container {
+          display: flex;
+          align-items: center;
+          gap: 0.5rem;
+        }
+
+        .edit-model-btn {
+          background: rgba(139, 92, 246, 0.2);
+          border: 1px solid rgba(139, 92, 246, 0.4);
+          color: #cbd5e1;
+          padding: 0.25rem 0.5rem;
+          border-radius: 4px;
+          cursor: pointer;
+          font-size: 0.75rem;
+          transition: all 0.2s;
+          white-space: nowrap;
+        }
+
+        .edit-model-btn:hover {
+          background: rgba(139, 92, 246, 0.3);
+          border-color: rgba(139, 92, 246, 0.6);
+          color: #e2e8f0;
+        }
+
+        .model-edit-container {
+          display: flex;
+          gap: 0.5rem;
+          align-items: center;
+          flex-wrap: wrap;
+        }
+
+        .model-select {
+          background: rgba(0, 0, 0, 0.3);
+          border: 1px solid rgba(139, 92, 246, 0.4);
+          color: #cbd5e1;
+          padding: 0.4rem 0.6rem;
+          border-radius: 4px;
+          font-size: 0.8rem;
+          cursor: pointer;
+          flex: 1;
+          min-width: 150px;
+        }
+
+        .model-select:focus {
+          outline: none;
+          border-color: rgba(139, 92, 246, 0.8);
+          background: rgba(0, 0, 0, 0.4);
+        }
+
+        .save-model-btn,
+        .cancel-model-btn {
+          background: rgba(139, 92, 246, 0.2);
+          border: 1px solid rgba(139, 92, 246, 0.4);
+          color: #cbd5e1;
+          padding: 0.4rem 0.6rem;
+          border-radius: 4px;
+          cursor: pointer;
+          font-size: 0.75rem;
+          transition: all 0.2s;
+          white-space: nowrap;
+        }
+
+        .save-model-btn:hover:not(:disabled) {
+          background: rgba(34, 197, 94, 0.3);
+          border-color: rgba(34, 197, 94, 0.6);
+          color: #e2e8f0;
+        }
+
+        .cancel-model-btn:hover:not(:disabled) {
+          background: rgba(239, 68, 68, 0.3);
+          border-color: rgba(239, 68, 68, 0.6);
+          color: #e2e8f0;
+        }
+
+        .save-model-btn:disabled,
+        .cancel-model-btn:disabled {
+          opacity: 0.5;
+          cursor: not-allowed;
+        }
+
         /* Responsive Design */
         @media (max-width: 1200px) {
           .notebook-layout {
@@ -903,6 +1122,18 @@ const AgentDetail = ({ agent, onBack }: AgentDetailProps) => {
           }
         }
       `}</style>
+
+      {/* Agent Editor Modal */}
+      <AgentEditor
+        agent={agent}
+        isOpen={isEditorOpen}
+        onClose={() => setIsEditorOpen(false)}
+        onSave={(updatedAgent) => {
+          setAgent(updatedAgent)
+          setSelectedModel(updatedAgent.llmModel || '')
+          console.log('✅ Agent updated:', updatedAgent)
+        }}
+      />
     </div>
   )
 }

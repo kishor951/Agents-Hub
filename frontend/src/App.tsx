@@ -6,9 +6,10 @@ import CreateAgent from './components/CreateAgent'
 import AgentDetail from './components/AgentDetail'
 import BreedScreen from './components/BreedScreen'
 import ChildAgentView from './components/ChildAgentView'
+import WalletTest from './components/WalletTest'
 import { Agent } from './types'
 
-type Screen = 'dashboard' | 'create' | 'agent-detail' | 'breed' | 'child'
+type Screen = 'dashboard' | 'create' | 'agent-detail' | 'breed' | 'child' | 'wallet-test'
 
 function App() {
   const [walletAddress, setWalletAddress] = useState<string | null>(null)
@@ -106,6 +107,9 @@ function App() {
                 agent={childAgent}
                 onBack={handleBackToDashboard}
               />
+            )}
+            {currentScreen === 'wallet-test' && (
+              <WalletTest />
             )}
           </>
         )}
