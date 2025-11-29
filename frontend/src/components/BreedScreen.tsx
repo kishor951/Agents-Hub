@@ -40,6 +40,11 @@ const BreedScreen = ({ parentA, parentB, walletAddress, onFusionComplete, onBack
     return () => clearTimeout(timer)
   }, [currentSentence])
 
+  // Auto-load compatibility analysis when component mounts
+  useEffect(() => {
+    handleFuse()
+  }, [])
+
   const sentences = [
     { text: "Should Humans have all the Fun?", highlight: "all the Fun?" },
     { text: "Now, AI Agents can also Breed!", highlight: "Breed!" }
@@ -268,40 +273,36 @@ const BreedScreen = ({ parentA, parentB, walletAddress, onFusionComplete, onBack
 
       <h2>Agent Fusion</h2>
 
-      <div className="parents-display">
-        <div className="parent">
-          <h3>Parent A</h3>
-          <AgentCard agent={parentA} />
-        </div>
-
-        <div className="fusion-arrow">
-          {step === 'preview' && 'DNA'}
-          {step === 'fusing' && '⚡'}
-          {step === 'minting' && 'Mint'}
-        </div>
-
-        <div className="parent">
-          <h3>Parent B</h3>
-          <AgentCard agent={parentB} />
-        </div>
-      </div>
-
       {step === 'preview' && (
-        <div className="preview-section">
-          <h3>Predicted Child Traits</h3>
-          <div className="predicted-skills">
-            {predictedSkills.map((skill, idx) => (
-              <span key={idx} className="skill-badge">{skill}</span>
-            ))}
-          </div>
-          <p className="fusion-info">
-            Generation: {Math.max(parentA.generation, parentB.generation) + 1}<br />
+        <>
+          <div className="parents-display">
+            <div className="parent">
+              <h3>Parent A</h3>
+              <AgentCard agent={parentA} />
+            </div>
 
-          </p>
-          <button className="fuse-action-button" onClick={handleFuse} disabled={loading}>
-            Get a Date
-          </button>
-        </div>
+            <div className="fusion-arrow">
+              DNA
+            </div>
+
+            <div className="parent">
+              <h3>Parent B</h3>
+              <AgentCard agent={parentB} />
+            </div>
+          </div>
+
+          <div className="preview-section">
+            <h3>Predicted Child Traits</h3>
+            <div className="predicted-skills">
+              {predictedSkills.map((skill, idx) => (
+                <span key={idx} className="skill-badge">{skill}</span>
+              ))}
+            </div>
+            <p className="fusion-info">
+              Generation: {Math.max(parentA.generation, parentB.generation) + 1}<br />
+            </p>
+          </div>
+        </>
       )}
 
       {step === 'compatibility' && (
