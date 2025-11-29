@@ -150,79 +150,202 @@ const Dashboard = ({ walletAddress, onStartBreeding, onViewAgent }: DashboardPro
       )}
 
       <style>{`
+        /* ========== GLASSMORPHIC DASHBOARD ========== */
         .dashboard {
-          padding: 1.5rem 2rem 2rem 2rem;
+          max-width: 1400px;
+          margin: 0 auto;
+          padding: 2.5rem var(--content-padding, 0.09375rem);
+          position: relative;
+          z-index: 10;
         }
 
         .subtitle {
-          color: #888;
-          margin: 0 0 1.5rem 0;
-          font-size: 0.95rem;
+          color: var(--color-text-secondary, #8F90A6);
+          margin: 0 0 2rem 0;
+          font-size: 1rem;
+          font-family: var(--font-mono, 'Space Mono', monospace);
+          text-transform: uppercase;
+          letter-spacing: 0.1em;
+          font-weight: 500;
         }
 
+        /* Empty State - Holographic Style */
         .empty-state {
           text-align: center;
-          padding: 3rem 2rem;
-          background: rgba(255, 255, 255, 0.02);
-          border-radius: 16px;
-          border: 2px dashed rgba(139, 92, 246, 0.3);
+          padding: 5rem 3rem;
+          background: linear-gradient(135deg, 
+            rgba(0, 240, 255, 0.05) 0%, 
+            rgba(255, 255, 255, 0.05) 100%);
+          backdrop-filter: blur(20px);
+          -webkit-backdrop-filter: blur(20px);
+          border-radius: 24px;
+          border: 2px dashed rgba(0, 240, 255, 0.3);
           margin: 0;
+          position: relative;
+          overflow: hidden;
+          box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.3);
+        }
+
+        .empty-state::before {
+          content: '';
+          position: absolute;
+          top: -50%;
+          left: -50%;
+          width: 200%;
+          height: 200%;
+          background: linear-gradient(
+            45deg,
+            transparent 30%,
+            rgba(255, 255, 255, 0.05) 50%,
+            transparent 70%
+          );
+          animation: holographic-shine 5s ease-in-out infinite;
         }
 
         .empty-icon {
-          font-size: 4rem;
-          margin-bottom: 1rem;
-          opacity: 0.6;
+          font-size: 5rem;
+          margin-bottom: 1.5rem;
+          opacity: 0.7;
+          filter: drop-shadow(0 0 20px rgba(0, 240, 255, 0.6));
+          position: relative;
+          z-index: 2;
         }
 
         .empty-state h3 {
-          color: #fff;
+          color: var(--color-text-primary, #FFFFFF);
           margin-bottom: 1rem;
-          font-size: 1.5rem;
+          font-size: 2rem;
+          font-family: var(--font-headline, 'Orbitron', sans-serif);
+          text-transform: uppercase;
+          letter-spacing: 0.05em;
+          background: linear-gradient(135deg, #00F0FF 0%, #FFFFFF 100%);
+          -webkit-background-clip: text;
+          -webkit-text-fill-color: transparent;
+          background-clip: text;
+          position: relative;
+          z-index: 2;
         }
 
         .empty-state p {
-          color: #888;
-          margin-bottom: 1.5rem;
+          color: var(--color-text-secondary, #8F90A6);
+          margin-bottom: 2rem;
           font-size: 1rem;
-          max-width: 400px;
+          max-width: 500px;
           margin-left: auto;
           margin-right: auto;
+          line-height: 1.6;
+          position: relative;
+          z-index: 2;
         }
 
+        /* Create Agent Button - Glassmorphic */
         .create-agent-btn {
-          background: linear-gradient(135deg, #8b5cf6 0%, #6366f1 100%);
-          color: white;
-          border: none;
-          padding: 0.9rem 2rem;
-          border-radius: 8px;
-          font-size: 1rem;
-          font-weight: 600;
+          background: linear-gradient(135deg, 
+            rgba(0, 240, 255, 0.3), 
+            rgba(255, 255, 255, 0.15));
+          backdrop-filter: blur(10px);
+          -webkit-backdrop-filter: blur(10px);
+          color: var(--color-text-primary, #FFFFFF);
+          border: 1px solid rgba(0, 240, 255, 0.5);
+          padding: 1rem 2.5rem;
+          border-radius: 100px;
+          font-size: 0.875rem;
+          font-weight: 700;
+          font-family: var(--font-mono, 'Space Mono', monospace);
+          text-transform: uppercase;
+          letter-spacing: 0.1em;
           cursor: pointer;
-          transition: all 0.2s;
+          transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+          box-shadow: 0 0 30px rgba(0, 240, 255, 0.5);
+          position: relative;
+          z-index: 2;
         }
 
         .create-agent-btn:hover {
-          transform: translateY(-2px);
-          box-shadow: 0 8px 25px rgba(139, 92, 246, 0.4);
+          transform: translateY(-4px) scale(1.05);
+          background: linear-gradient(135deg, 
+            rgba(0, 240, 255, 0.5), 
+            rgba(255, 255, 255, 0.25));
+          box-shadow: 
+            0 0 40px rgba(0, 240, 255, 0.8),
+            0 0 80px rgba(255, 255, 255, 0.3);
+          border-color: var(--color-primary, #00F0FF);
         }
 
+        .create-agent-btn:active {
+          transform: translateY(-2px) scale(1.02);
+        }
+
+        /* Agents Grid - Responsive */
         .agents-grid {
           display: grid;
-          grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-          gap: 1.5rem;
+          grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+          gap: 2rem;
           margin: 0;
+          position: relative;
+          z-index: 10;
+        }
+
+        /* Responsive Design */
+        @media (max-width: 1200px) {
+          .dashboard {
+            padding: 2.5rem 0.0625rem;
+          }
+
+          .agents-grid {
+            grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+            gap: 1.5rem;
+          }
         }
 
         @media (max-width: 768px) {
+          .dashboard {
+            padding: 2rem 0.046875rem;
+          }
+
           .agents-grid {
             grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+            gap: 1.25rem;
+          }
+
+          .empty-state {
+            padding: 4rem 2rem;
+          }
+
+          .empty-state h3 {
+            font-size: 1.5rem;
+          }
+
+          .create-agent-btn {
+            padding: 0.875rem 2rem;
+            font-size: 0.8125rem;
           }
         }
 
         @media (max-width: 600px) {
+          .dashboard {
+            padding: 1.5rem 0.03125rem;
+          }
+
           .agents-grid {
             grid-template-columns: 1fr;
+            gap: 1rem;
+          }
+
+          .empty-state {
+            padding: 3rem 1.5rem;
+          }
+
+          .empty-icon {
+            font-size: 4rem;
+          }
+
+          .empty-state h3 {
+            font-size: 1.25rem;
+          }
+
+          .empty-state p {
+            font-size: 0.875rem;
           }
         }
       `}</style>

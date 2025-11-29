@@ -18,6 +18,11 @@ const NavigationBar = ({ walletAddress, onConnect, onDisconnect, currentScreen, 
   const dropdownRef = useRef<HTMLDivElement>(null)
   const profileButtonRef = useRef<HTMLButtonElement>(null)
   const [dropdownPosition, setDropdownPosition] = useState({ top: 0, right: 0 })
+  const [showPaddingEditor, setShowPaddingEditor] = useState(false)
+  const [navPadding, setNavPadding] = useState(0.09375)
+  const [contentPadding, setContentPadding] = useState(0.09375)
+  const [showCreateDropdown, setShowCreateDropdown] = useState(false)
+  const createButtonRef = useRef<HTMLDivElement>(null)
 
   // Close dropdown when clicking outside
   useEffect(() => {
@@ -63,40 +68,112 @@ const NavigationBar = ({ walletAddress, onConnect, onDisconnect, currentScreen, 
     return `hsl(${hue}, 70%, 60%)`
   }
 
+  // Apply padding changes to CSS
+  const applyPadding = () => {
+    document.documentElement.style.setProperty('--nav-padding', `${navPadding}rem`)
+    document.documentElement.style.setProperty('--content-padding', `${contentPadding}rem`)
+  }
+
+  const handleApply = () => {
+    applyPadding()
+    showToastNotification(`Padding applied: Nav ${navPadding}rem, Content ${contentPadding}rem`)
+  }
+
   return (
     <nav className="navigation-bar">
-      {/* Left: Project Name and Navigation */}
-      <div className="nav-left">
-        <div className="project-name">
-          <span className="project-icon">🧬</span>
-          <span className="project-title">Agents Hub</span>
+      <div className="nav-container">
+        {/* Left: Project Name */}
+        <div className="nav-left">
+          <div className="project-name">
+            <span className="project-icon">🧬</span>
+            <span className="project-title">Agents Hub</span>
+          </div>
         </div>
+
+      {/* Right: Navigation Tabs + Wallet Profile */}
+      <div className="nav-right">
+        {/* Padding Editor Toggle */}
+        <button
+          className="padding-editor-toggle"
+          onClick={() => setShowPaddingEditor(!showPaddingEditor)}
+          title="Adjust Padding"
+        >
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <circle cx="12" cy="12" r="3"/>
+            <path d="M12 1v6m0 6v6M1 12h6m6 0h6"/>
+          </svg>
+        </button>
+
         {walletAddress && (
           <div className="nav-tabs">
             <button
               className={`nav-tab ${currentScreen === 'dashboard' ? 'active' : ''}`}
               onClick={() => onScreenChange('dashboard')}
             >
-              🧭 Explore Agents
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <circle cx="12" cy="12" r="10"/>
+                <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>
+                <path d="M2 12h20"/>
+              </svg>
+              <span>Explore Agents</span>
             </button>
-            <button
-              className={`nav-tab ${currentScreen === 'create' ? 'active' : ''}`}
-              onClick={() => onScreenChange('create')}
+            <div 
+              className="nav-tab-wrapper"
+              ref={createButtonRef}
+              onMouseEnter={() => setShowCreateDropdown(true)}
+              onMouseLeave={() => setShowCreateDropdown(false)}
             >
-              ✨ Create Agents
-            </button>
-            <button
-              className={`nav-tab ${currentScreen === 'wallet-test' ? 'active' : ''}`}
-              onClick={() => onScreenChange('wallet-test')}
-            >
-              🔍 Test Wallet
-            </button>
+              <button
+                className={`nav-tab ${(currentScreen === 'create' || currentScreen === 'breed') ? 'active' : ''}`}
+              >
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M12 5v14M5 12h14"/>
+                </svg>
+                <span>Create Agents</span>
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="dropdown-icon">
+                  <polyline points="6 9 12 15 18 9"/>
+                </svg>
+              </button>
+              {showCreateDropdown && (
+                <div className="create-dropdown">
+                  <button 
+                    className={`create-option ${currentScreen === 'create' ? 'active' : ''}`}
+                    onClick={() => {
+                      onScreenChange('create')
+                      setShowCreateDropdown(false)
+                    }}
+                  >
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M12 2v20M2 12h20"/>
+                      <circle cx="12" cy="12" r="3"/>
+                    </svg>
+                    <div className="option-text">
+                      <span className="option-title">DIY Agent</span>
+                      <span className="option-desc">Create from scratch</span>
+                    </div>
+                  </button>
+                  <button 
+                    className={`create-option ${currentScreen === 'breed' ? 'active' : ''}`}
+                    onClick={() => {
+                      onScreenChange('breed')
+                      setShowCreateDropdown(false)
+                    }}
+                  >
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M20.2 7.8l-7.7 7.7-4-4-5.7 5.7"/>
+                      <path d="M15 7h6v6"/>
+                      <path d="M9 18H3v-6"/>
+                    </svg>
+                    <div className="option-text">
+                      <span className="option-title">Breed Agents</span>
+                      <span className="option-desc">Combine two agents</span>
+                    </div>
+                  </button>
+                </div>
+              )}
+            </div>
           </div>
         )}
-      </div>
-
-      {/* Right: Wallet Profile */}
-      <div className="nav-right">
         {!walletAddress ? (
           <div className="wallet-connect-nav">
             <WalletConnect onConnect={onConnect} onDisconnect={onDisconnect} />
@@ -128,20 +205,6 @@ const NavigationBar = ({ walletAddress, onConnect, onDisconnect, currentScreen, 
                 top: `${dropdownPosition.top}px`,
                 right: `${dropdownPosition.right}px`
               }}>
-                <div className="dropdown-header">
-                  <div className="dropdown-avatar" style={{ backgroundColor: generateAvatar(walletAddress) }}>
-                    <span className="avatar-icon">👛</span>
-                  </div>
-                  <div className="dropdown-info">
-                    <div className="dropdown-label">Connected Wallet</div>
-                    <div className="dropdown-full-address" title={walletAddress}>
-                      {walletAddress}
-                    </div>
-                  </div>
-                </div>
-
-                <div className="dropdown-divider"></div>
-
                 <div className="dropdown-actions">
                   <button
                     className="dropdown-action copy-address"
@@ -150,7 +213,11 @@ const NavigationBar = ({ walletAddress, onConnect, onDisconnect, currentScreen, 
                       showToastNotification('Address copied!')
                     }}
                   >
-                    📋 Copy Address
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
+                      <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
+                    </svg>
+                    <span>Copy Address</span>
                   </button>
                   <button
                     className="dropdown-action view-explorer"
@@ -159,7 +226,24 @@ const NavigationBar = ({ walletAddress, onConnect, onDisconnect, currentScreen, 
                       window.open(explorerUrl, '_blank')
                     }}
                   >
-                    🔍 View on Explorer
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <circle cx="11" cy="11" r="8"/>
+                      <path d="M21 21l-4.35-4.35"/>
+                    </svg>
+                    <span>View on Explorer</span>
+                  </button>
+                  <button
+                    className={`dropdown-action test-wallet ${currentScreen === 'wallet-test' ? 'active' : ''}`}
+                    onClick={() => {
+                      setShowDropdown(false)
+                      onScreenChange('wallet-test')
+                    }}
+                  >
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
+                      <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+                    </svg>
+                    <span>Test Wallet</span>
                   </button>
                 </div>
 
@@ -174,12 +258,18 @@ const NavigationBar = ({ walletAddress, onConnect, onDisconnect, currentScreen, 
                     onDisconnect()
                   }}
                 >
-                  🔌 Disconnect Wallet
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
+                    <polyline points="16 17 21 12 16 7"/>
+                    <line x1="21" y1="12" x2="9" y2="12"/>
+                  </svg>
+                  <span>Disconnect Wallet</span>
                 </button>
               </div>
             )}
           </div>
         )}
+      </div>
       </div>
 
       {/* Toast Notification */}
@@ -189,89 +279,515 @@ const NavigationBar = ({ walletAddress, onConnect, onDisconnect, currentScreen, 
         </div>
       )}
 
+      {/* Padding Editor Panel */}
+      {showPaddingEditor && (
+        <div className="padding-editor-panel">
+          <div className="editor-header">
+            <h4>Adjust Padding (rem)</h4>
+            <button className="close-editor" onClick={() => setShowPaddingEditor(false)}>✕</button>
+          </div>
+          <div className="editor-controls">
+            <div className="control-group">
+              <label>Navigation Padding: {navPadding}rem</label>
+              <input
+                type="range"
+                min="0"
+                max="3"
+                step="0.0625"
+                value={navPadding}
+                onChange={(e) => setNavPadding(parseFloat(e.target.value))}
+              />
+              <input
+                type="number"
+                min="0"
+                max="3"
+                step="0.0625"
+                value={navPadding}
+                onChange={(e) => setNavPadding(parseFloat(e.target.value))}
+              />
+            </div>
+            <div className="control-group">
+              <label>Content Padding: {contentPadding}rem</label>
+              <input
+                type="range"
+                min="0"
+                max="3"
+                step="0.0625"
+                value={contentPadding}
+                onChange={(e) => setContentPadding(parseFloat(e.target.value))}
+              />
+              <input
+                type="number"
+                min="0"
+                max="3"
+                step="0.0625"
+                value={contentPadding}
+                onChange={(e) => setContentPadding(parseFloat(e.target.value))}
+              />
+            </div>
+            <button className="apply-btn" onClick={handleApply}>Apply Changes</button>
+            <div className="current-values">
+              <small>Current: Nav {navPadding}rem ({navPadding * 16}px) | Content {contentPadding}rem ({contentPadding * 16}px)</small>
+            </div>
+          </div>
+        </div>
+      )}
+
       <style>{`
+        /* ========== GLASSMORPHIC NAVIGATION BAR ========== */
         .navigation-bar {
+          background: rgba(10, 11, 16, 0.7);
+          backdrop-filter: blur(20px);
+          -webkit-backdrop-filter: blur(20px);
+          border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+          margin-bottom: 0;
+          width: 100%;
+          box-sizing: border-box;
+          position: sticky;
+          top: 0;
+          z-index: 100;
+          box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
+        }
+
+        .nav-container {
+          max-width: 1400px;
+          margin: 0 auto;
+          padding: 1rem var(--nav-padding, 0.09375rem);
           display: flex;
           justify-content: space-between;
           align-items: center;
-          padding: 0.875rem 2rem;
-          background: linear-gradient(135deg, rgba(139, 92, 246, 0.1) 0%, rgba(99, 102, 241, 0.1) 100%);
-          border-bottom: 1px solid rgba(139, 92, 246, 0.2);
-          backdrop-filter: blur(10px);
-          margin-bottom: 0;
-          border-radius: 0;
-          width: 100%;
-          box-sizing: border-box;
         }
 
         .nav-left {
           display: flex;
           align-items: center;
-          gap: 1.5rem;
+          gap: 2.5rem;
         }
 
+        /* Project Logo */
         .project-name {
           display: flex;
           align-items: center;
           gap: 0.75rem;
           cursor: pointer;
-          transition: all 0.2s;
+          transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
         }
 
         .project-name:hover {
-          transform: scale(1.05);
+          transform: translateY(-2px);
+          filter: drop-shadow(0 0 10px rgba(0, 240, 255, 0.5));
         }
 
         .project-icon {
-          font-size: 1.5rem;
+          font-size: 1.75rem;
+          filter: drop-shadow(0 0 8px rgba(0, 240, 255, 0.6));
         }
 
         .project-title {
-          font-size: 1.35rem;
+          font-size: 1.5rem;
           font-weight: 700;
-          background: linear-gradient(135deg, #8b5cf6 0%, #6366f1 100%);
+          font-family: var(--font-headline, 'Orbitron', sans-serif);
+          text-transform: uppercase;
+          letter-spacing: 0.05em;
+          background: linear-gradient(135deg, #00F0FF 0%, #FFFFFF 100%);
           -webkit-background-clip: text;
           -webkit-text-fill-color: transparent;
           background-clip: text;
         }
 
+        /* Padding Editor Toggle Button */
+        .padding-editor-toggle {
+          padding: 0.625rem;
+          background: rgba(255, 255, 255, 0.05);
+          backdrop-filter: blur(10px);
+          -webkit-backdrop-filter: blur(10px);
+          border: 1px solid rgba(255, 255, 255, 0.1);
+          border-radius: 8px;
+          color: var(--color-text-secondary, #8F90A6);
+          cursor: pointer;
+          transition: all 0.3s;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+        }
+
+        .padding-editor-toggle:hover {
+          background: rgba(255, 255, 255, 0.08);
+          border-color: rgba(0, 240, 255, 0.3);
+          color: var(--color-primary, #00F0FF);
+          box-shadow: 0 0 15px rgba(0, 240, 255, 0.3);
+        }
+
+        /* Padding Editor Panel */
+        .padding-editor-panel {
+          position: fixed;
+          top: 80px;
+          right: 20px;
+          width: 380px;
+          background: rgba(10, 11, 16, 0.95);
+          backdrop-filter: blur(20px);
+          -webkit-backdrop-filter: blur(20px);
+          border: 1px solid rgba(0, 240, 255, 0.3);
+          border-radius: 16px;
+          box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.5), 0 0 40px rgba(0, 240, 255, 0.2);
+          z-index: 10000;
+          padding: 1.5rem;
+        }
+
+        .editor-header {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          margin-bottom: 1.5rem;
+          padding-bottom: 1rem;
+          border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .editor-header h4 {
+          font-size: 1rem;
+          font-family: var(--font-headline, 'Orbitron', sans-serif);
+          text-transform: uppercase;
+          letter-spacing: 0.05em;
+          color: var(--color-primary, #00F0FF);
+          margin: 0;
+        }
+
+        .close-editor {
+          background: none;
+          border: none;
+          color: var(--color-text-secondary, #8F90A6);
+          font-size: 1.25rem;
+          cursor: pointer;
+          padding: 0.25rem 0.5rem;
+          transition: all 0.3s;
+        }
+
+        .close-editor:hover {
+          color: var(--color-text-primary, #FFFFFF);
+        }
+
+        .editor-controls {
+          display: flex;
+          flex-direction: column;
+          gap: 1.25rem;
+        }
+
+        .control-group {
+          display: flex;
+          flex-direction: column;
+          gap: 0.5rem;
+        }
+
+        .control-group label {
+          font-size: 0.75rem;
+          font-family: var(--font-mono, 'Space Mono', monospace);
+          text-transform: uppercase;
+          letter-spacing: 0.05em;
+          color: var(--color-text-secondary, #8F90A6);
+        }
+
+        .control-group input[type="range"] {
+          width: 100%;
+          height: 4px;
+          background: rgba(255, 255, 255, 0.1);
+          border-radius: 2px;
+          outline: none;
+          -webkit-appearance: none;
+        }
+
+        .control-group input[type="range"]::-webkit-slider-thumb {
+          -webkit-appearance: none;
+          appearance: none;
+          width: 16px;
+          height: 16px;
+          background: var(--color-primary, #00F0FF);
+          border-radius: 50%;
+          cursor: pointer;
+          box-shadow: 0 0 10px rgba(0, 240, 255, 0.5);
+        }
+
+        .control-group input[type="range"]::-moz-range-thumb {
+          width: 16px;
+          height: 16px;
+          background: var(--color-primary, #00F0FF);
+          border-radius: 50%;
+          cursor: pointer;
+          border: none;
+          box-shadow: 0 0 10px rgba(0, 240, 255, 0.5);
+        }
+
+        .control-group input[type="number"] {
+          width: 100%;
+          padding: 0.5rem;
+          background: rgba(255, 255, 255, 0.05);
+          border: 1px solid rgba(255, 255, 255, 0.1);
+          border-radius: 8px;
+          color: var(--color-text-primary, #FFFFFF);
+          font-family: var(--font-mono, 'Space Mono', monospace);
+          font-size: 0.875rem;
+        }
+
+        .control-group input[type="number"]:focus {
+          outline: none;
+          border-color: var(--color-primary, #00F0FF);
+          box-shadow: 0 0 10px rgba(0, 240, 255, 0.3);
+        }
+
+        .apply-btn {
+          padding: 0.75rem 1.5rem;
+          background: linear-gradient(135deg, rgba(0, 240, 255, 0.3), rgba(255, 255, 255, 0.15));
+          backdrop-filter: blur(10px);
+          -webkit-backdrop-filter: blur(10px);
+          border: 1px solid rgba(0, 240, 255, 0.5);
+          border-radius: 100px;
+          color: var(--color-text-primary, #FFFFFF);
+          font-family: var(--font-mono, 'Space Mono', monospace);
+          font-size: 0.75rem;
+          font-weight: 700;
+          text-transform: uppercase;
+          letter-spacing: 0.05em;
+          cursor: pointer;
+          transition: all 0.3s;
+          box-shadow: 0 0 20px rgba(0, 240, 255, 0.3);
+        }
+
+        .apply-btn:hover {
+          transform: translateY(-2px);
+          box-shadow: 0 0 30px rgba(0, 240, 255, 0.6);
+          background: linear-gradient(135deg, rgba(0, 240, 255, 0.5), rgba(255, 255, 255, 0.25));
+        }
+
+        .current-values {
+          padding: 0.75rem;
+          background: rgba(0, 240, 255, 0.05);
+          border: 1px solid rgba(0, 240, 255, 0.2);
+          border-radius: 8px;
+          text-align: center;
+        }
+
+        .current-values small {
+          font-family: var(--font-mono, 'Space Mono', monospace);
+          color: var(--color-text-secondary, #8F90A6);
+          font-size: 0.6875rem;
+        }
+
+        /* Navigation Tabs - Glass Pills */
         .nav-tabs {
           display: flex;
-          gap: 0.75rem;
+          gap: 0.5rem;
+        }
+
+        .nav-tab-wrapper {
+          position: relative;
+        }
+
+        .nav-tab-wrapper::after {
+          content: '';
+          position: absolute;
+          top: 100%;
+          left: 0;
+          right: 0;
+          height: 12px;
+          background: transparent;
         }
 
         .nav-tab {
-          padding: 0.4rem 0.9rem;
+          padding: 0.625rem 1.25rem;
           background: rgba(255, 255, 255, 0.05);
-          border: 1px solid rgba(139, 92, 246, 0.2);
-          border-radius: 6px;
-          color: #cbd5e1;
+          backdrop-filter: blur(10px);
+          -webkit-backdrop-filter: blur(10px);
+          border: 1px solid rgba(255, 255, 255, 0.1);
+          border-radius: 100px;
+          color: var(--color-text-secondary, #8F90A6);
           cursor: pointer;
           font-weight: 500;
-          font-size: 0.825rem;
-          transition: all 0.2s;
+          font-size: 0.75rem;
+          font-family: var(--font-mono, 'Space Mono', monospace);
+          text-transform: uppercase;
+          letter-spacing: 0.05em;
+          transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+          box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.1);
+          display: flex;
+          align-items: center;
+          gap: 0.5rem;
+        }
+
+        .dropdown-icon {
+          margin-left: 0.25rem;
+          transition: transform 0.3s;
+        }
+
+        .nav-tab-wrapper:hover .dropdown-icon {
+          transform: rotate(180deg);
         }
 
         .nav-tab:hover {
-          background: rgba(139, 92, 246, 0.1);
-          border-color: rgba(139, 92, 246, 0.4);
+          background: rgba(255, 255, 255, 0.08);
+          border-color: rgba(0, 240, 255, 0.3);
+          color: var(--color-text-primary, #FFFFFF);
+          transform: translateY(-2px);
+          box-shadow: 0 0 20px rgba(0, 240, 255, 0.3);
         }
 
         .nav-tab.active {
-          background: rgba(139, 92, 246, 0.2);
-          border-color: rgba(139, 92, 246, 0.6);
-          color: #e2e8f0;
+          background: linear-gradient(135deg, rgba(0, 240, 255, 0.2), rgba(0, 240, 255, 0.05));
+          border-color: var(--color-primary, #00F0FF);
+          color: var(--color-primary, #00F0FF);
+          box-shadow: 0 0 20px rgba(0, 240, 255, 0.5), 0 0 40px rgba(0, 240, 255, 0.3);
+        }
+
+        /* Create Agents Dropdown */
+        .create-dropdown {
+          position: absolute;
+          top: calc(100% + 8px);
+          left: 0;
+          min-width: 240px;
+          background: rgba(10, 11, 16, 0.95);
+          backdrop-filter: blur(20px);
+          -webkit-backdrop-filter: blur(20px);
+          border: 1px solid rgba(0, 240, 255, 0.3);
+          border-radius: 12px;
+          box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.5), 0 0 40px rgba(0, 240, 255, 0.2);
+          padding: 0.5rem;
+          z-index: 1000;
+          animation: slideDown 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        /* Add padding area to prevent dropdown from closing */
+        .create-dropdown::before {
+          content: '';
+          position: absolute;
+          top: -8px;
+          left: 0;
+          right: 0;
+          height: 8px;
+          background: transparent;
+        }
+
+        .create-option {
+          display: flex;
+          align-items: center;
+          gap: 0.875rem;
+          width: 100%;
+          padding: 0.875rem 1rem;
+          background: rgba(255, 255, 255, 0.05);
+          backdrop-filter: blur(10px);
+          -webkit-backdrop-filter: blur(10px);
+          border: 1px solid rgba(255, 255, 255, 0.1);
+          border-radius: 8px;
+          color: var(--color-text-secondary, #8F90A6);
+          cursor: pointer;
+          transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+          margin-bottom: 0.5rem;
+          text-align: left;
+        }
+
+        .create-option:last-child {
+          margin-bottom: 0;
+        }
+
+        .create-option:hover {
+          background: rgba(255, 255, 255, 0.08);
+          border-color: rgba(0, 240, 255, 0.4);
+          transform: translateX(4px);
+          box-shadow: 0 0 15px rgba(0, 240, 255, 0.3);
+        }
+
+        .create-option.active {
+          background: linear-gradient(135deg, rgba(0, 240, 255, 0.2), rgba(0, 240, 255, 0.05));
+          border-color: var(--color-primary, #00F0FF);
+          color: var(--color-primary, #00F0FF);
+          box-shadow: 0 0 20px rgba(0, 240, 255, 0.4);
+        }
+
+        .create-option svg {
+          flex-shrink: 0;
+          color: currentColor;
+        }
+
+        .option-text {
+          display: flex;
+          flex-direction: column;
+          gap: 0.25rem;
+        }
+
+        .option-title {
+          font-size: 0.75rem;
+          font-weight: 600;
+          font-family: var(--font-mono, 'Space Mono', monospace);
+          text-transform: uppercase;
+          letter-spacing: 0.05em;
+          color: var(--color-text-primary, #FFFFFF);
+        }
+
+        .option-desc {
+          font-size: 0.625rem;
+          font-family: var(--font-primary, 'Space Grotesk', sans-serif);
+          color: var(--color-text-secondary, #8F90A6);
+          text-transform: none;
+        }
+
+        .create-option.active .option-title {
+          color: var(--color-primary, #00F0FF);
         }
 
         .nav-right {
           display: flex;
           align-items: center;
+          gap: 2rem;
         }
 
-        .wallet-connect-nav {
+        /* Navigation Tabs - Glass Pills */
+        .nav-tabs {
           display: flex;
+          gap: 0.5rem;
         }
 
+        .nav-tab {
+          display: flex;
+          align-items: center;
+          gap: 0.5rem;
+          padding: 0.625rem 1.25rem;
+          background: rgba(255, 255, 255, 0.05);
+          backdrop-filter: blur(10px);
+          -webkit-backdrop-filter: blur(10px);
+          border: 1px solid rgba(255, 255, 255, 0.1);
+          border-radius: 100px;
+          color: var(--color-text-secondary, #8F90A6);
+          cursor: pointer;
+          font-weight: 500;
+          font-size: 0.75rem;
+          font-family: var(--font-mono, 'Space Mono', monospace);
+          text-transform: uppercase;
+          letter-spacing: 0.05em;
+          transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+          box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.1);
+        }
+
+        .nav-tab svg {
+          width: 16px;
+          height: 16px;
+          flex-shrink: 0;
+        }
+
+        .nav-tab:hover {
+          background: rgba(255, 255, 255, 0.08);
+          border-color: rgba(0, 240, 255, 0.3);
+          color: var(--color-text-primary, #FFFFFF);
+          transform: translateY(-2px);
+          box-shadow: 0 0 20px rgba(0, 240, 255, 0.3);
+        }
+
+        .nav-tab.active {
+          background: linear-gradient(135deg, rgba(0, 240, 255, 0.2), rgba(0, 240, 255, 0.05));
+          border-color: var(--color-primary, #00F0FF);
+          color: var(--color-primary, #00F0FF);
+          box-shadow: 0 0 20px rgba(0, 240, 255, 0.5), 0 0 40px rgba(0, 240, 255, 0.3);
+        }
+
+        .nav-tab.active svg {
+          filter: drop-shadow(0 0 4px rgba(0, 240, 255, 0.8));
+        }
         .wallet-profile-container {
           position: relative;
         }
@@ -279,64 +795,71 @@ const NavigationBar = ({ walletAddress, onConnect, onDisconnect, currentScreen, 
         .profile-button {
           display: flex;
           align-items: center;
-          gap: 0.6rem;
-          padding: 0.6rem 0.9rem;
+          gap: 0.75rem;
+          padding: 0.5rem 1.25rem;
           background: rgba(255, 255, 255, 0.05);
-          border: 1px solid rgba(139, 92, 246, 0.3);
-          border-radius: 6px;
+          backdrop-filter: blur(10px);
+          -webkit-backdrop-filter: blur(10px);
+          border: 1px solid rgba(255, 255, 255, 0.1);
+          border-radius: 100px;
           cursor: pointer;
-          transition: all 0.2s;
-          color: #cbd5e1;
+          transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+          color: var(--color-text-primary, #FFFFFF);
           font-weight: 600;
+          font-family: var(--font-mono, 'Space Mono', monospace);
+          box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.2);
         }
 
         .profile-button:hover {
-          background: rgba(139, 92, 246, 0.15);
-          border-color: rgba(139, 92, 246, 0.5);
-          transform: translateY(-1px);
-          box-shadow: 0 2px 8px rgba(139, 92, 246, 0.2);
+          background: rgba(255, 255, 255, 0.08);
+          border-color: rgba(255, 255, 255, 0.5);
+          transform: translateY(-2px);
+          box-shadow: 0 0 20px rgba(255, 255, 255, 0.3), 0 0 40px rgba(255, 255, 255, 0.2);
         }
 
         .profile-avatar {
-          width: 32px;
-          height: 32px;
+          width: 36px;
+          height: 36px;
           border-radius: 50%;
           display: flex;
           align-items: center;
           justify-content: center;
-          font-size: 1rem;
+          font-size: 1.125rem;
           border: 2px solid rgba(255, 255, 255, 0.2);
+          box-shadow: 0 0 15px rgba(0, 240, 255, 0.4);
         }
 
         .avatar-icon {
-          filter: drop-shadow(0 0 2px rgba(0, 0, 0, 0.3));
+          filter: drop-shadow(0 0 3px rgba(0, 0, 0, 0.5));
         }
 
         .profile-address {
-          font-family: 'Courier New', monospace;
-          font-size: 0.8rem;
+          font-family: var(--font-mono, 'Space Mono', monospace);
+          font-size: 0.75rem;
+          letter-spacing: 0.02em;
         }
 
         .dropdown-chevron {
-          font-size: 0.7rem;
-          transition: transform 0.2s;
-          opacity: 0.7;
+          font-size: 0.625rem;
+          transition: transform 0.3s;
+          opacity: 0.6;
         }
 
-        /* Dropdown Menu */
+        /* Dropdown Menu - Enhanced Glass */
         .profile-dropdown {
           position: fixed;
-          top: auto;
-          right: auto;
-          margin-top: 0.5rem;
-          background: rgba(15, 23, 42, 0.95);
-          border: 1px solid rgba(139, 92, 246, 0.3);
-          border-radius: 12px;
-          backdrop-filter: blur(10px);
-          box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
-          min-width: 280px;
+          background: rgba(10, 11, 16, 0.95);
+          backdrop-filter: blur(20px);
+          -webkit-backdrop-filter: blur(20px);
+          border: 1px solid rgba(255, 255, 255, 0.1);
+          border-radius: 16px;
+          box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.5), 
+                      0 0 40px rgba(0, 240, 255, 0.1);
+          min-width: 240px;
           z-index: 10000;
-          animation: slideDown 0.2s ease-out;
+          animation: slideDown 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+          overflow: hidden;
+          padding: 0.75rem;
         }
 
         @keyframes slideDown {
@@ -350,49 +873,14 @@ const NavigationBar = ({ walletAddress, onConnect, onDisconnect, currentScreen, 
           }
         }
 
-        .dropdown-header {
-          display: flex;
-          align-items: center;
-          gap: 1rem;
-          padding: 1rem;
-        }
-
-        .dropdown-avatar {
-          width: 48px;
-          height: 48px;
-          border-radius: 50%;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          font-size: 1.5rem;
-          border: 2px solid rgba(139, 92, 246, 0.4);
-          flex-shrink: 0;
-        }
-
-        .dropdown-info {
-          flex: 1;
-          min-width: 0;
-        }
-
-        .dropdown-label {
-          font-size: 0.75rem;
-          color: #94a3b8;
-          text-transform: uppercase;
-          letter-spacing: 0.05em;
-          margin-bottom: 0.25rem;
-        }
-
-        .dropdown-full-address {
-          font-family: 'Courier New', monospace;
-          font-size: 0.75rem;
-          color: #cbd5e1;
-          word-break: break-all;
-          line-height: 1.3;
-        }
-
         .dropdown-divider {
           height: 1px;
-          background: linear-gradient(90deg, transparent, rgba(139, 92, 246, 0.3), transparent);
+          background: linear-gradient(90deg, 
+            transparent, 
+            rgba(0, 240, 255, 0.3) 20%, 
+            rgba(255, 255, 255, 0.2) 80%, 
+            transparent
+          );
           margin: 0.5rem 0;
         }
 
@@ -400,126 +888,205 @@ const NavigationBar = ({ walletAddress, onConnect, onDisconnect, currentScreen, 
           display: flex;
           flex-direction: column;
           gap: 0.5rem;
-          padding: 0.5rem;
         }
 
         .dropdown-action {
-          padding: 0.75rem 1rem;
-          background: rgba(139, 92, 246, 0.1);
-          border: 1px solid rgba(139, 92, 246, 0.2);
-          border-radius: 6px;
-          color: #cbd5e1;
+          display: flex;
+          align-items: center;
+          gap: 0.75rem;
+          padding: 0.875rem 1.125rem;
+          background: rgba(255, 255, 255, 0.05);
+          backdrop-filter: blur(10px);
+          -webkit-backdrop-filter: blur(10px);
+          border: 1px solid rgba(255, 255, 255, 0.1);
+          border-radius: 10px;
+          color: var(--color-text-primary, #FFFFFF);
           cursor: pointer;
           font-weight: 500;
-          font-size: 0.875rem;
-          transition: all 0.2s;
+          font-size: 0.8125rem;
+          font-family: var(--font-mono, 'Space Mono', monospace);
+          text-transform: uppercase;
+          letter-spacing: 0.03em;
+          transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
           text-align: left;
         }
 
+        .dropdown-action svg {
+          width: 16px;
+          height: 16px;
+          flex-shrink: 0;
+        }
+
         .dropdown-action:hover {
-          background: rgba(139, 92, 246, 0.2);
-          border-color: rgba(139, 92, 246, 0.4);
-          color: #e2e8f0;
+          background: rgba(0, 240, 255, 0.15);
+          border-color: rgba(0, 240, 255, 0.4);
+          transform: translateX(4px);
+          box-shadow: 0 0 15px rgba(0, 240, 255, 0.3);
         }
 
-        .dropdown-action.copy-address:before {
-          content: '';
-        }
-
-        .dropdown-action.view-explorer:before {
-          content: '';
+        .dropdown-action.active {
+          background: linear-gradient(135deg, rgba(0, 240, 255, 0.2), rgba(0, 240, 255, 0.05));
+          border-color: var(--color-primary, #00F0FF);
+          color: var(--color-primary, #00F0FF);
         }
 
         .dropdown-disconnect {
+          display: flex;
+          align-items: center;
+          gap: 0.75rem;
           width: 100%;
-          padding: 0.75rem 1rem;
-          margin: 0.5rem;
-          background: rgba(239, 68, 68, 0.1);
-          border: 1px solid rgba(239, 68, 68, 0.3);
-          border-radius: 6px;
-          color: #fca5a5;
+          padding: 0.875rem 1.125rem;
+          margin-top: 0.5rem;
+          background: rgba(255, 82, 82, 0.1);
+          backdrop-filter: blur(10px);
+          -webkit-backdrop-filter: blur(10px);
+          border: 1px solid rgba(255, 82, 82, 0.3);
+          border-radius: 10px;
+          color: #FF5252;
           cursor: pointer;
           font-weight: 600;
-          font-size: 0.875rem;
-          transition: all 0.2s;
+          font-size: 0.8125rem;
+          font-family: var(--font-mono, 'Space Mono', monospace);
+          text-transform: uppercase;
+          letter-spacing: 0.05em;
+          transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        .dropdown-disconnect svg {
+          width: 16px;
+          height: 16px;
+          flex-shrink: 0;
         }
 
         .dropdown-disconnect:hover {
-          background: rgba(239, 68, 68, 0.2);
-          border-color: rgba(239, 68, 68, 0.5);
-          color: #fecaca;
+          background: rgba(255, 82, 82, 0.2);
+          border-color: rgba(255, 82, 82, 0.6);
+          box-shadow: 0 0 20px rgba(255, 82, 82, 0.4);
+          transform: translateY(-2px);
         }
 
-        /* Responsive */
-        @media (max-width: 768px) {
-          .navigation-bar {
-            padding: 0.75rem 1rem;
-            margin-bottom: 1.5rem;
-          }
+        /* Toast Notification - Glassmorphic */
+        .toast-notification {
+          position: fixed;
+          top: 30px;
+          left: 50%;
+          transform: translateX(-50%);
+          background: rgba(32, 227, 178, 0.15);
+          backdrop-filter: blur(20px);
+          -webkit-backdrop-filter: blur(20px);
+          border: 1px solid rgba(32, 227, 178, 0.4);
+          color: #20E3B2;
+          padding: 1rem 2rem;
+          border-radius: 100px;
+          box-shadow: 0 0 30px rgba(32, 227, 178, 0.5), 0 8px 32px rgba(0, 0, 0, 0.3);
+          font-weight: 600;
+          font-family: var(--font-mono, 'Space Mono', monospace);
+          text-transform: uppercase;
+          letter-spacing: 0.05em;
+          z-index: 10001;
+          animation: slideIn 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+        }
 
-          .nav-left {
-            flex-direction: column;
-            align-items: flex-start;
-            gap: 1rem;
+        @keyframes slideIn {
+          from {
+            opacity: 0;
+            transform: translateX(-50%) translateY(-30px);
           }
+          to {
+            opacity: 1;
+            transform: translateX(-50%) translateY(0);
+          }
+        }
 
-          .project-title {
-            font-size: 1.25rem;
+        /* Responsive Design */
+        @media (max-width: 1024px) {
+          .nav-container {
+            padding: 1rem 0.0625rem;
           }
 
           .nav-tabs {
-            width: 100%;
-            justify-content: center;
+            gap: 0.375rem;
           }
-
+          
           .nav-tab {
-            flex: 1;
-            text-align: center;
+            padding: 0.5rem 0.875rem;
+            font-size: 0.6875rem;
           }
 
-          .profile-button {
+          .nav-tab span {
+            display: none;
+          }
+
+          .nav-tab svg {
+            margin: 0;
+          }
+        }
+
+        @media (max-width: 768px) {
+          .nav-container {
+            padding: 1rem 0.046875rem;
+          }
+
+          .nav-right {
+            gap: 1rem;
+          }
+
+          .nav-tabs {
+            gap: 0.375rem;
+          }
+          
+          .nav-tab {
             padding: 0.5rem 0.75rem;
+            font-size: 0.6875rem;
+          }
+
+          .nav-tab span {
+            display: none;
           }
 
           .profile-address {
             display: none;
           }
 
-          .profile-avatar {
-            width: 32px;
-            height: 32px;
-            font-size: 1rem;
-          }
-
           .profile-dropdown {
-            min-width: 250px;
+            min-width: 280px;
           }
         }
 
-        /* Toast Notification */
-        .toast-notification {
-          position: fixed;
-          top: 20px;
-          left: 50%;
-          transform: translateX(-50%);
-          background: linear-gradient(135deg, #4ade80 0%, #22c55e 100%);
-          color: white;
-          padding: 1rem 1.5rem;
-          border-radius: 8px;
-          box-shadow: 0 4px 12px rgba(74, 222, 128, 0.3);
-          font-weight: 600;
-          z-index: 10001;
-          animation: slideIn 0.3s ease-out;
-        }
-
-        @keyframes slideIn {
-          from {
-            opacity: 0;
-            transform: translateX(-50%) translateY(-20px);
+        @media (max-width: 480px) {
+          .nav-container {
+            padding: 0.875rem 0.03125rem;
+            flex-wrap: wrap;
+            gap: 0.75rem;
           }
-          to {
-            opacity: 1;
-            transform: translateX(-50%) translateY(0);
+
+          .nav-left {
+            width: 100%;
+          }
+          
+          .project-title {
+            font-size: 1.125rem;
+          }
+
+          .nav-right {
+            width: 100%;
+            justify-content: space-between;
+          }
+          
+          .nav-tabs {
+            gap: 0.25rem;
+            flex: 1;
+          }
+          
+          .nav-tab {
+            font-size: 0.625rem;
+            padding: 0.5rem 0.625rem;
+            flex: 1;
+            justify-content: center;
+          }
+
+          .nav-tab span {
+            display: none;
           }
         }
       `}</style>

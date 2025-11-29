@@ -224,84 +224,116 @@ Or use Demo Mode to test the platform.`
         .wallet-button,
         .demo-button,
         .disconnect-button {
-          padding: 8px 16px;
+          padding: 0.75rem 1.5rem;
           border: none;
-          border-radius: 6px;
+          border-radius: 100px;
           cursor: pointer;
-          font-weight: 600;
-          transition: all 0.2s;
-          font-size: 14px;
+          font-weight: 700;
+          font-family: var(--font-mono, 'Space Mono', monospace);
+          text-transform: uppercase;
+          letter-spacing: 0.05em;
+          transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+          font-size: 0.75rem;
+          backdrop-filter: blur(10px);
+          -webkit-backdrop-filter: blur(10px);
+          box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.2);
         }
 
         .wallet-button {
-          background: linear-gradient(135deg, #8b5cf6 0%, #6366f1 100%);
-          color: white;
-          border: 1px solid rgba(139, 92, 246, 0.5);
+          background: linear-gradient(135deg, 
+            rgba(0, 240, 255, 0.3), 
+            rgba(0, 240, 255, 0.1));
+          color: var(--color-primary, #00F0FF);
+          border: 1px solid rgba(0, 240, 255, 0.5);
+          box-shadow: 0 0 20px rgba(0, 240, 255, 0.4);
         }
 
         .wallet-button:hover:not(:disabled) {
-          transform: translateY(-2px);
-          box-shadow: 0 4px 12px rgba(139, 92, 246, 0.4);
+          transform: translateY(-3px);
+          background: linear-gradient(135deg, 
+            rgba(0, 240, 255, 0.5), 
+            rgba(0, 240, 255, 0.2));
+          box-shadow: 0 0 30px rgba(0, 240, 255, 0.8);
+          border-color: var(--color-primary, #00F0FF);
         }
 
         .wallet-button:disabled {
-          opacity: 0.6;
+          opacity: 0.4;
           cursor: not-allowed;
+          transform: none;
         }
 
         .demo-button {
-          background: rgba(100, 200, 255, 0.1);
-          color: #64c8ff;
-          border: 1px solid rgba(100, 200, 255, 0.3);
+          background: rgba(255, 255, 255, 0.05);
+          color: var(--color-text-secondary, #8F90A6);
+          border: 1px solid rgba(255, 255, 255, 0.1);
         }
 
         .demo-button:hover {
-          background: rgba(100, 200, 255, 0.2);
-          border-color: rgba(100, 200, 255, 0.5);
+          background: rgba(255, 255, 255, 0.08);
+          border-color: rgba(0, 240, 255, 0.3);
+          color: var(--color-text-primary, #FFFFFF);
+          transform: translateY(-2px);
         }
 
         .wallet-info {
           display: flex;
           align-items: center;
-          gap: 15px;
-          padding: 10px 0;
+          gap: 1rem;
+          padding: 0.75rem 0;
         }
 
         .wallet-status {
           display: flex;
           align-items: center;
-          gap: 10px;
+          gap: 0.75rem;
         }
 
         .wallet-badge {
-          background: linear-gradient(135deg, #4ade80 0%, #22c55e 100%);
-          color: white;
-          padding: 6px 12px;
-          border-radius: 6px;
-          font-weight: 600;
-          font-size: 12px;
+          background: linear-gradient(135deg, 
+            rgba(32, 227, 178, 0.3), 
+            rgba(32, 227, 178, 0.1));
+          backdrop-filter: blur(10px);
+          -webkit-backdrop-filter: blur(10px);
+          color: #20E3B2;
+          padding: 0.5rem 1rem;
+          border-radius: 100px;
+          border: 1px solid rgba(32, 227, 178, 0.4);
+          font-weight: 700;
+          font-size: 0.6875rem;
+          font-family: var(--font-mono, 'Space Mono', monospace);
+          text-transform: uppercase;
+          letter-spacing: 0.05em;
           white-space: nowrap;
+          box-shadow: 0 0 15px rgba(32, 227, 178, 0.4);
         }
 
         .wallet-address {
-          background: rgba(148, 163, 184, 0.1);
-          color: #cbd5e1;
-          padding: 8px 12px;
-          border-radius: 6px;
-          font-family: 'Courier New', monospace;
-          font-size: 13px;
-          border: 1px solid rgba(148, 163, 184, 0.2);
+          background: rgba(255, 255, 255, 0.05);
+          backdrop-filter: blur(10px);
+          -webkit-backdrop-filter: blur(10px);
+          color: var(--color-text-primary, #FFFFFF);
+          padding: 0.625rem 1rem;
+          border-radius: 100px;
+          font-family: var(--font-mono, 'Space Mono', monospace);
+          font-size: 0.75rem;
+          border: 1px solid rgba(255, 255, 255, 0.1);
+          letter-spacing: 0.02em;
         }
 
         .disconnect-button {
-          background: rgba(239, 68, 68, 0.1);
-          color: #fca5a5;
-          border: 1px solid rgba(239, 68, 68, 0.3);
+          background: rgba(255, 82, 82, 0.15);
+          backdrop-filter: blur(10px);
+          -webkit-backdrop-filter: blur(10px);
+          color: #FF5252;
+          border: 1px solid rgba(255, 82, 82, 0.3);
         }
 
         .disconnect-button:hover {
-          background: rgba(239, 68, 68, 0.2);
-          border-color: rgba(239, 68, 68, 0.5);
+          background: rgba(255, 82, 82, 0.25);
+          border-color: rgba(255, 82, 82, 0.5);
+          box-shadow: 0 0 20px rgba(255, 82, 82, 0.4);
+          transform: translateY(-2px);
         }
 
         @media (max-width: 768px) {
