@@ -339,16 +339,13 @@ const CreateAgent = ({ walletAddress, onAgentCreated }: CreateAgentProps) => {
       <div className="create-agent-container">
         {/* Header */}
         <div className="page-header">
-          <h1>✨ Create Your AI Agents</h1>
-          <div className="catchy-line">
-            Build the Extraordinary
-          </div>
+          <h1>Create AI Agents</h1>
         </div>
 
         <div className="create-agent-content">
           {/* Create Agent Form */}
           <div className="create-form-section">
-            <h2>🛠️ Agent Builder</h2>
+
             <div className="create-form">
               <div className="form-group">
                 <label htmlFor="name">Agent Name *</label>
@@ -443,7 +440,7 @@ const CreateAgent = ({ walletAddress, onAgentCreated }: CreateAgentProps) => {
                 onClick={handleCreateAgent}
                 disabled={isCreating}
               >
-                {isCreating ? 'Creating...' : '🚀 Create Agent'}
+                {isCreating ? 'Creating...' : 'Create Agent'}
               </button>
             </div>
           </div>

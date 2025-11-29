@@ -1,5 +1,6 @@
 import { useState } from 'react'
-import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom'
+import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from 'react-router-dom'
+import * as React from 'react'
 import './App.css'
 import NavigationBar from './components/NavigationBar'
 import Dashboard from './components/Dashboard'
@@ -13,10 +14,23 @@ import MyAgents from './components/MyAgents'
 import LandingPage from './components/LandingPage'
 import { Agent } from './types'
 
-function App() {
+function AppContent() {
   const [walletAddress, setWalletAddress] = useState<string | null>(null)
   const [selectedParents, setSelectedParents] = useState<[Agent | null, Agent | null]>([null, null])
   const [childAgent, setChildAgent] = useState<Agent | null>(null)
+  const location = useLocation()
+  
+  // Determine if we're on a create page
+  const isCreatePage = location.pathname.startsWith('/create') || location.pathname.startsWith('/breed')
+  
+  // Apply create-mode class to body element
+  React.useEffect(() => {
+    if (isCreatePage) {
+      document.body.classList.add('create-mode')
+    } else {
+      document.body.classList.remove('create-mode')
+    }
+  }, [isCreatePage])
 
   const handleWalletConnect = (address: string) => {
     setWalletAddress(address)
@@ -40,15 +54,14 @@ function App() {
   }
 
   return (
-    <Router>
-      <div className="app">
-        <NavigationBar 
-          walletAddress={walletAddress} 
-          onConnect={handleWalletConnect}
-          onDisconnect={handleWalletDisconnect}
-        />
+    <div className={`app ${isCreatePage ? 'create-mode' : ''}`}>
+      <NavigationBar 
+        walletAddress={walletAddress} 
+        onConnect={handleWalletConnect}
+        onDisconnect={handleWalletDisconnect}
+      />
 
-        <main className="app-main">
+      <main className="app-main">
           <Routes>
             {/* Landing Page - Default route */}
             <Route path="/" element={<LandingPage />} />
@@ -158,6 +171,13 @@ function App() {
           <p>Hackathon MVP • Cardano Testnet • 95% Owner / 5% Platform Split</p>
         </footer>
       </div>
+    )
+  }
+
+function App() {
+  return (
+    <Router>
+      <AppContent />
     </Router>
   )
 }

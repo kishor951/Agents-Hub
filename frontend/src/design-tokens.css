@@ -148,6 +148,16 @@ body {
   -moz-osx-font-smoothing: grayscale;
   position: relative;
   overflow-x: hidden;
+  --gradient-cyan: rgba(0, 240, 255, 0.3);
+  --gradient-white: rgba(255, 255, 255, 0.1);
+  --gradient-light: rgba(255, 255, 255, 0.05);
+  transition: --gradient-cyan 0.3s ease, --gradient-white 0.3s ease, --gradient-light 0.3s ease;
+}
+
+body.create-mode {
+  --gradient-cyan: rgba(139, 92, 246, 0.4);
+  --gradient-white: rgba(139, 92, 246, 0.15);
+  --gradient-light: rgba(139, 92, 246, 0.08);
 }
 
 /* Ambient Background Layer */

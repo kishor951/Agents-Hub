@@ -18,6 +18,9 @@ const NavigationBar = ({ walletAddress, onConnect, onDisconnect }: NavigationBar
   const createButtonRef = useRef<HTMLDivElement>(null)
   const navigate = useNavigate()
   const location = useLocation()
+  
+  // Determine if we're on a create page
+  const isCreatePage = location.pathname.startsWith('/create') || location.pathname.startsWith('/breed')
 
   // Close dropdown when clicking outside
   useEffect(() => {
@@ -69,7 +72,7 @@ const NavigationBar = ({ walletAddress, onConnect, onDisconnect }: NavigationBar
         <div className="nav-left">
           <Link to="/" className="project-name">
             <span className="project-icon">🧬</span>
-            <span className="project-title">Agents Hub</span>
+            <span className={`project-title ${isCreatePage ? 'create-mode' : ''}`}>Agents Hub</span>
           </Link>
         </div>
 
@@ -96,7 +99,7 @@ const NavigationBar = ({ walletAddress, onConnect, onDisconnect }: NavigationBar
             >
               <Link
                 to="/create"
-                className={`nav-tab ${(location.pathname === '/create' || location.pathname === '/breed') ? 'active' : ''}`}
+                className={`nav-tab create-tab ${(location.pathname === '/create' || location.pathname === '/breed') ? 'active create-mode' : ''}`}
               >
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                   <path d="M12 5v14M5 12h14"/>
@@ -329,6 +332,14 @@ const NavigationBar = ({ walletAddress, onConnect, onDisconnect }: NavigationBar
           text-transform: uppercase;
           letter-spacing: 0.05em;
           background: linear-gradient(135deg, #00F0FF 0%, #FFFFFF 100%);
+          -webkit-background-clip: text;
+          -webkit-text-fill-color: transparent;
+          background-clip: text;
+          transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        .project-title.create-mode {
+          background: linear-gradient(135deg, #8b5cf6 0%, #FFFFFF 100%);
           -webkit-background-clip: text;
           -webkit-text-fill-color: transparent;
           background-clip: text;
@@ -593,6 +604,16 @@ const NavigationBar = ({ walletAddress, onConnect, onDisconnect }: NavigationBar
           animation: slideDown 0.3s cubic-bezier(0.4, 0, 0.2, 1);
         }
 
+        .app.create-mode .create-dropdown {
+          border: 1px solid rgba(139, 92, 246, 0.3);
+          box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.5), 0 0 40px rgba(139, 92, 246, 0.2);
+        }
+
+        .app.create-mode .create-dropdown {
+          border: 1px solid rgba(139, 92, 246, 0.3);
+          box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.5), 0 0 40px rgba(139, 92, 246, 0.2);
+        }
+
         /* Add padding area to prevent dropdown from closing */
         .create-dropdown::before {
           content: '';
@@ -628,17 +649,31 @@ const NavigationBar = ({ walletAddress, onConnect, onDisconnect }: NavigationBar
         }
 
         .create-option:hover {
-          background: rgba(255, 255, 255, 0.08);
-          border-color: rgba(0, 240, 255, 0.4);
+          background: rgba(139, 92, 246, 0.1);
+          border-color: rgba(139, 92, 246, 0.5);
           transform: translateX(4px);
-          box-shadow: 0 0 15px rgba(0, 240, 255, 0.3);
+          box-shadow: 0 0 15px rgba(139, 92, 246, 0.3);
+        }
+
+        .app.create-mode .create-option:hover {
+          background: rgba(139, 92, 246, 0.1);
+          border-color: rgba(139, 92, 246, 0.5);
+          transform: translateX(4px);
+          box-shadow: 0 0 15px rgba(139, 92, 246, 0.3);
         }
 
         .create-option.active {
-          background: linear-gradient(135deg, rgba(0, 240, 255, 0.2), rgba(0, 240, 255, 0.05));
-          border-color: var(--color-primary, #00F0FF);
-          color: var(--color-primary, #00F0FF);
-          box-shadow: 0 0 20px rgba(0, 240, 255, 0.4);
+          background: linear-gradient(135deg, rgba(139, 92, 246, 0.2), rgba(139, 92, 246, 0.05));
+          border-color: #8b5cf6;
+          color: #8b5cf6;
+          box-shadow: 0 0 20px rgba(139, 92, 246, 0.4);
+        }
+
+        .app.create-mode .create-option.active {
+          background: linear-gradient(135deg, rgba(139, 92, 246, 0.2), rgba(139, 92, 246, 0.05));
+          border-color: #8b5cf6;
+          color: #8b5cf6;
+          box-shadow: 0 0 20px rgba(139, 92, 246, 0.4);
         }
 
         .create-option svg {
@@ -669,7 +704,11 @@ const NavigationBar = ({ walletAddress, onConnect, onDisconnect }: NavigationBar
         }
 
         .create-option.active .option-title {
-          color: var(--color-primary, #00F0FF);
+          color: #8b5cf6;
+        }
+
+        .app.create-mode .create-option.active .option-title {
+          color: #8b5cf6;
         }
 
         .nav-right {
@@ -719,6 +758,20 @@ const NavigationBar = ({ walletAddress, onConnect, onDisconnect }: NavigationBar
           box-shadow: 0 0 20px rgba(0, 240, 255, 0.3);
         }
 
+        .nav-tab-wrapper .nav-tab:hover {
+          background: rgba(139, 92, 246, 0.1);
+          border-color: rgba(139, 92, 246, 0.4);
+          color: #8b5cf6;
+          box-shadow: 0 0 20px rgba(139, 92, 246, 0.3);
+        }
+
+        .nav-tab.create-tab:hover {
+          background: rgba(139, 92, 246, 0.1);
+          border-color: rgba(139, 92, 246, 0.4);
+          color: #8b5cf6;
+          box-shadow: 0 0 20px rgba(139, 92, 246, 0.3);
+        }
+
         .nav-tab.active {
           background: linear-gradient(135deg, rgba(0, 240, 255, 0.2), rgba(0, 240, 255, 0.05));
           border-color: var(--color-primary, #00F0FF);
@@ -726,8 +779,43 @@ const NavigationBar = ({ walletAddress, onConnect, onDisconnect }: NavigationBar
           box-shadow: 0 0 20px rgba(0, 240, 255, 0.5), 0 0 40px rgba(0, 240, 255, 0.3);
         }
 
+        .nav-tab.active[href*="create"],
+        .nav-tab.active[href*="breed"] {
+          background: linear-gradient(135deg, rgba(139, 92, 246, 0.2), rgba(139, 92, 246, 0.05));
+          border-color: #8b5cf6;
+          color: #8b5cf6;
+          box-shadow: 0 0 20px rgba(139, 92, 246, 0.5), 0 0 40px rgba(139, 92, 246, 0.3);
+        }
+
+        .nav-tab.create-tab.active {
+          background: linear-gradient(135deg, rgba(139, 92, 246, 0.2), rgba(139, 92, 246, 0.05));
+          border-color: #8b5cf6;
+          color: #8b5cf6;
+          box-shadow: 0 0 20px rgba(139, 92, 246, 0.5), 0 0 40px rgba(139, 92, 246, 0.3);
+        }
+
+        .app.create-mode .nav-tab.active {
+          background: linear-gradient(135deg, rgba(139, 92, 246, 0.2), rgba(139, 92, 246, 0.05));
+          border-color: #8b5cf6;
+          color: #8b5cf6;
+          box-shadow: 0 0 20px rgba(139, 92, 246, 0.5), 0 0 40px rgba(139, 92, 246, 0.3);
+        }
+
         .nav-tab.active svg {
           filter: drop-shadow(0 0 4px rgba(0, 240, 255, 0.8));
+        }
+
+        .nav-tab.active[href*="create"] svg,
+        .nav-tab.active[href*="breed"] svg {
+          filter: drop-shadow(0 0 4px rgba(139, 92, 246, 0.8));
+        }
+
+        .nav-tab.create-tab.active svg {
+          filter: drop-shadow(0 0 4px rgba(139, 92, 246, 0.8));
+        }
+
+        .app.create-mode .nav-tab.active svg {
+          filter: drop-shadow(0 0 4px rgba(139, 92, 246, 0.8));
         }
         .wallet-profile-container {
           position: relative;
@@ -965,6 +1053,11 @@ const NavigationBar = ({ walletAddress, onConnect, onDisconnect }: NavigationBar
           color: #0A0B10;
           box-shadow: 0 4px 20px rgba(0, 240, 255, 0.4), 0 0 40px rgba(0, 240, 255, 0.2);
           white-space: nowrap;
+        }
+
+        .app.create-mode .page-indicator-inline .indicator-label {
+          background: linear-gradient(135deg, #8b5cf6 0%, #a855f7 100%);
+          box-shadow: 0 4px 20px rgba(139, 92, 246, 0.4), 0 0 40px rgba(139, 92, 246, 0.2);
         }
 
         @keyframes indicatorFadeIn {

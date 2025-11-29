@@ -6,6 +6,13 @@
   flex-direction: column;
   position: relative;
   z-index: 2;
+  transition: background 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.app.create-mode {
+  --gradient-cyan: rgba(139, 92, 246, 0.4);
+  --gradient-white: rgba(139, 92, 246, 0.15);
+  --gradient-light: rgba(139, 92, 246, 0.08);
 }
 
 /* Main Content Container */
