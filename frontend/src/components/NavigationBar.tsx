@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from 'react'
 import { Link, useNavigate, useLocation } from 'react-router-dom'
 import WalletConnect from './WalletConnect'
+import Logo from './Logo'
 
 interface NavigationBarProps {
   walletAddress: string | null
@@ -71,7 +72,7 @@ const NavigationBar = ({ walletAddress, onConnect, onDisconnect }: NavigationBar
         {/* Left: Project Name */}
         <div className="nav-left">
           <Link to="/" className="project-name">
-            <span className="project-icon">🧬</span>
+            <Logo size={36} className="project-logo" isCreateMode={isCreatePage} />
             <span className={`project-title ${isCreatePage ? 'create-mode' : ''}`}>Agents Hub</span>
           </Link>
         </div>
@@ -320,9 +321,13 @@ const NavigationBar = ({ walletAddress, onConnect, onDisconnect }: NavigationBar
           filter: drop-shadow(0 0 10px rgba(0, 240, 255, 0.5));
         }
 
-        .project-icon {
-          font-size: 1.75rem;
-          filter: drop-shadow(0 0 8px rgba(0, 240, 255, 0.6));
+        .project-logo {
+          filter: drop-shadow(0 0 8px rgba(0, 240, 255, 0.4));
+          transition: filter 0.3s ease;
+        }
+
+        .project-name:hover .project-logo {
+          filter: drop-shadow(0 0 12px rgba(0, 240, 255, 0.8));
         }
 
         .project-title {

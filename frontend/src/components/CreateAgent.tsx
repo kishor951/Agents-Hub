@@ -748,7 +748,6 @@ const CreateAgent = ({ walletAddress, onAgentCreated }: CreateAgentProps) => {
           background: rgba(139, 92, 246, 0.1);
           transform: translateY(-1px);
           box-shadow: 0 4px 12px rgba(139, 92, 246, 0.3);
-          outline: none;
         }
 
         .page-header {

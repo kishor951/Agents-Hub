@@ -1,45 +1,15 @@
-import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import InteractiveVideoMeme from './InteractiveVideoMeme'
 
 const LandingPage = () => {
-  const [currentMeme, setCurrentMeme] = useState(0)
   const navigate = useNavigate()
-
-  const memes = [
-    {
-      image: '🤖',
-      title: 'Welcome to Agents Hub',
-      subtitle: 'Where AI Agents Meet Blockchain Magic',
-      description: 'Fuse, mint, and collect unique AI agents on the Cardano blockchain'
-    },
-    {
-      image: '🧬',
-      title: 'Genetic Fusion',
-      subtitle: 'Combine AI Personalities',
-      description: 'Breed agents with unique skills and personalities through genetic algorithms'
-    },
-    {
-      image: '💎',
-      title: 'NFT Collection',
-      subtitle: 'Own Your AI Creations',
-      description: 'Mint your fused agents as NFTs and build your collection'
-    }
-  ]
-
-  const nextMeme = () => {
-    setCurrentMeme((prev) => (prev + 1) % memes.length)
-  }
-
-  const prevMeme = () => {
-    setCurrentMeme((prev) => (prev - 1 + memes.length) % memes.length)
-  }
 
   return (
     <div className="landing-page">
       <div className="hero-section">
         <div className="hero-content">
           <h1 className="hero-title">Agents Hub</h1>
-          <p className="hero-subtitle">Fuse • Mint • Collect</p>
+          <p className="hero-subtitle">Chat, Create, Breed with agents.</p>
           <p className="hero-description">
             The ultimate platform for creating, breeding, and collecting AI agents on Cardano
           </p>
@@ -61,30 +31,9 @@ const LandingPage = () => {
         </div>
 
         <div className="meme-section">
-          <div className="meme-container">
-            <button className="meme-nav prev" onClick={prevMeme}>‹</button>
-
-            <div className="meme-card">
-              <div className="meme-emoji">
-                {memes[currentMeme].image}
-              </div>
-              <h3 className="meme-title">{memes[currentMeme].title}</h3>
-              <h4 className="meme-subtitle">{memes[currentMeme].subtitle}</h4>
-              <p className="meme-description">{memes[currentMeme].description}</p>
-            </div>
-
-            <button className="meme-nav next" onClick={nextMeme}>›</button>
-          </div>
-
-          <div className="meme-indicators">
-            {memes.map((_, index) => (
-              <button
-                key={index}
-                className={`indicator ${index === currentMeme ? 'active' : ''}`}
-                onClick={() => setCurrentMeme(index)}
-              />
-            ))}
-          </div>
+          <InteractiveVideoMeme
+            videoSrc="/videos/agent-meme.mp4"
+          />
         </div>
       </div>
 
