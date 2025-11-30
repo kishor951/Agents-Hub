@@ -140,4 +140,5 @@ class CalculateCompatibilityResponse(BaseModel):
     score: int  # Compatibility percentage (0-100)
     analysis: str  # Genetic analysis text (detailed explanation)
     predicted_skills: List[str]  # Predicted child skills (based on parent skills)
+    predicted_name: Optional[str] = None  # AI-generated name for the child agent
 

@@ -70,8 +70,8 @@ export const createBredAgentMetadata = (
   masumiDid: string,
   parentA_assetId: string,
   parentB_assetId: string,
-  parentA_generation: number = 0,
-  parentB_generation: number = 0
+  parentA_generation: number = 1,  // First generation is 1, not 0
+  parentB_generation: number = 1   // First generation is 1, not 0
 ) => {
   // Child generation is max(parent generations) + 1
   const childGeneration = Math.max(parentA_generation, parentB_generation) + 1;

@@ -289,23 +289,54 @@ Parent A:
 Parent B:
 {parent_b_info}
 
-Please provide:
-1. A compatibility score from 0-100 (where 100 is perfect compatibility)
-2. A detailed genetic analysis explaining the synergy, potential traits, and how their characteristics would combine
-3. A list of 3-5 predicted skills that a child agent would likely inherit
+COMPATIBILITY SCORE CALCULATION (0-100):
+Calculate the score using this weighted formula:
+- Purpose Alignment (30%): How well do their purposes complement or overlap? Same domain = higher score.
+- Skill Synergy (25%): Do their skills create powerful combinations? Complementary skills = higher score.
+- Personality Compatibility (20%): Do their personalities work well together? Complementary traits = higher score.
+- Instruction Harmony (15%): Do their instructions align or conflict? Compatible approaches = higher score.
+- Genetic Potential (10%): Potential for novel, valuable traits in offspring? Unique combinations = bonus points.
+
+Score ranges:
+- 80-100: Excellent compatibility, high breeding potential
+- 60-79: Good compatibility, solid breeding potential
+- 40-59: Moderate compatibility, some potential but limitations exist
+- 20-39: Low compatibility, significant challenges expected
+- 0-19: Poor compatibility, not recommended for breeding
+
+GENETIC ANALYSIS REQUIREMENTS:
+Write a sharp, crisp, and on-point analysis (2-4 sentences maximum). Be direct and specific. Focus on:
+- The core compatibility factor (what makes them compatible or not)
+- The most significant trait combination that will emerge
+- One key strength and one key challenge (if any)
+- The genetic outcome in practical terms
+
+Avoid fluff, generic statements, or lengthy explanations. Be precise and actionable.
+
+PREDICTED SKILLS FORMAT:
+Provide exactly 5-6 skills total:
+- 3 common/broad skills (1-2 words each): General capabilities like "Marketing", "Analytics", "Design"
+- 2-3 specific skills (not more than 3 words each): Detailed capabilities like "Social Media Strategy", "Data Visualization", "Brand Identity Design"
+
+PREDICTED CHILD AGENT NAME:
+Generate a creative, professional name for the child agent that:
+- Reflects the combination of both parents' purposes/domains
+- Is 2-4 words maximum
+- Sounds professional and AI-agent appropriate
+- Avoids generic names like "Agent" or "Bot"
+- Examples: "Marketing Intelligence Pro", "Creative Analytics Engine", "Strategic Design Advisor"
 
 Format your response as JSON:
 {{
   "score": <number 0-100>,
-  "analysis": "<detailed text analysis>",
-  "predicted_skills": ["<skill1>", "<skill2>", "<skill3>"]
+  "analysis": "<sharp, crisp 2-4 sentence analysis>",
+  "predicted_skills": ["<broad skill 1>", "<broad skill 2>", "<broad skill 3>", "<specific skill 1>", "<specific skill 2>", "<specific skill 3>"],
+  "predicted_name": "<creative child agent name>"
 }}
 
-Be specific and detailed in your analysis. Consider:
-- How well their purposes align
-- How their personalities would complement each other
-- How their skills would combine
-- What unique traits might emerge
+Example skills format:
+- Broad: "Marketing", "Analytics", "Design"
+- Specific: "Social Media Strategy", "Data Visualization", "Brand Identity Design"
 """
         
         try:
@@ -336,16 +367,22 @@ Be specific and detailed in your analysis. Consider:
                     all_skills = list(set((parent_a_details.skills or []) + (parent_b_details.skills or [])))
                     predicted_skills = all_skills[:5] if len(all_skills) > 5 else all_skills
                 
+                # Extract predicted name
+                name_match = re.search(r'"predicted_name"\s*:\s*"([^"]+)"', response_text)
+                predicted_name = name_match.group(1) if name_match else None
+                
                 compatibility_data = {
                     "score": score,
                     "analysis": analysis,
-                    "predicted_skills": predicted_skills
+                    "predicted_skills": predicted_skills,
+                    "predicted_name": predicted_name
                 }
             
             # Ensure score is in valid range
             score = max(0, min(100, int(compatibility_data.get("score", 75))))
             analysis = compatibility_data.get("analysis", response_text)
             predicted_skills = compatibility_data.get("predicted_skills", [])
+            predicted_name = compatibility_data.get("predicted_name")
             
             # If no skills predicted, combine parent skills as fallback
             if not predicted_skills:
@@ -355,7 +392,8 @@ Be specific and detailed in your analysis. Consider:
             return CalculateCompatibilityResponse(
                 score=score,
                 analysis=analysis,
-                predicted_skills=predicted_skills
+                predicted_skills=predicted_skills,
+                predicted_name=predicted_name
             )
             
         except Exception as e:
@@ -382,10 +420,14 @@ Be specific and detailed in your analysis. Consider:
             fallback_analysis = f"{parent_a_details.name or 'Parent A'} and {parent_b_details.name or 'Parent B'} show potential for breeding. Their combined skills and purposes suggest a compatible match."
             fallback_skills = list((parent_a_skills | parent_b_skills))[:5]
             
+            # Generate fallback name by combining parent names
+            fallback_name = f"{parent_a_details.name.split(' ')[0] if parent_a_details.name else 'Parent'}-{parent_b_details.name.split(' ')[0] if parent_b_details.name else 'Parent'} Gen2"
+            
             return CalculateCompatibilityResponse(
                 score=fallback_score,
                 analysis=fallback_analysis,
-                predicted_skills=fallback_skills
+                predicted_skills=fallback_skills,
+                predicted_name=fallback_name
             )
     
     except HTTPException:

@@ -101,7 +101,8 @@ def get_agent_context(asset_id: str) -> Dict:
         name = f"Agent {asset_id[:8]}"
     
     # Get generation (always fresh from blockchain)
-    generation = properties.get("generation", 0) if properties else 0
+    # First generation is 1, not 0
+    generation = properties.get("generation", 1) if properties else 1
     
     # Get masumi_did (always fresh from blockchain)
     masumi_did = properties.get("masumi_did") if properties else None
@@ -147,7 +148,7 @@ def create_langchain_agent(
     """
     personality = agent_context.get("personality", "")
     name = agent_context.get("name", "Agent")
-    generation = agent_context.get("generation", 0)
+    generation = agent_context.get("generation", 1)  # First generation is 1, not 0
     
     # Use Gemini LLM if not provided
     if llm is None:

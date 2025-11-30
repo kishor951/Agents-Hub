@@ -57,9 +57,9 @@ const BreedScreen = ({ parentA, parentB, onFusionComplete, onBack }: BreedScreen
     setStep('signing')
 
     try {
-      // Get parent generations
-      const parentA_gen = parentA.generation || 0
-      const parentB_gen = parentB.generation || 0
+      // Get parent generations (default to 1 for first generation agents)
+      const parentA_gen = parentA.generation || 1
+      const parentB_gen = parentB.generation || 1
       const childGeneration = Math.max(parentA_gen, parentB_gen) + 1
 
       // Create metadata for bred agent with all child data
@@ -157,18 +157,19 @@ const BreedScreen = ({ parentA, parentB, onFusionComplete, onBack }: BreedScreen
         const data = await compatResponse.json()
         console.log(`✅ [Compatibility] Score: ${data.score}%`)
         console.log(`✅ [Compatibility] Predicted skills: ${data.predicted_skills?.join(', ') || 'None'}`)
+        console.log(`✅ [Compatibility] Predicted name: ${data.predicted_name || 'None'}`)
         setCompatibilityScore({
           score: data.score,
           analysis: data.analysis,
           predicted_skills: data.predicted_skills || []
         })
+        
+        // Use AI-generated name if available, otherwise fallback to default
+        const childName = data.predicted_name || `${parentA.name.split(' ')[0]}-${parentB.name.split(' ')[0]} Gen2`
+        setChildAgentName(childName)
       } else {
         throw new Error('Compatibility endpoint returned error')
       }
-      
-      // Generate default child name by combining parent names
-      const childName = `${parentA.name.split(' ')[0]}-${parentB.name.split(' ')[0]} Gen2`
-      setChildAgentName(childName)
       setLoading(false)
     } catch (error) {
       console.error('Compatibility calculation error:', error)
@@ -316,7 +317,13 @@ const BreedScreen = ({ parentA, parentB, onFusionComplete, onBack }: BreedScreen
 
           {loading ? (
             <div className="loading-container">
-              <div className="loading-spinner">🧬</div>
+              <div className="loading-spinner">
+                <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2z"/>
+                  <path d="M8 8h8M8 12h8M8 16h8"/>
+                  <path d="M12 6v12"/>
+                </svg>
+              </div>
               <h3>Analyzing Compatibility...</h3>
               <p>Calculating genetic compatibility and trait combinations</p>
             </div>
@@ -356,117 +363,179 @@ const BreedScreen = ({ parentA, parentB, onFusionComplete, onBack }: BreedScreen
                     )}
                   </div>
 
-                  {/* Analysis */}
-                  {compatibilityScore && (
-                    <div className="analysis-box">
-                      <h4>🧬 Genetic Analysis</h4>
-                      <p>{compatibilityScore.analysis}</p>
-                    </div>
-                  )}
+                  {/* Grid Layout for Sections */}
+                  <div className="compatibility-sections-grid">
+                    {/* Left Column */}
+                    <div className="compatibility-left-column">
+                      {/* Analysis */}
+                      {compatibilityScore && (
+                        <div className="analysis-box">
+                          <h4>
+                            <svg className="section-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                              <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2z"/>
+                              <path d="M8 8h8M8 12h8M8 16h8"/>
+                              <path d="M12 6v12"/>
+                            </svg>
+                            Genetic Analysis
+                          </h4>
+                          <p>{compatibilityScore.analysis}</p>
+                        </div>
+                      )}
 
-                  {/* Predicted Child Skills */}
-                  <div className="predicted-child-box">
-                    <h4>👶 Predicted Child Skills</h4>
-                    <div className="child-skills">
-                      {predictedSkills.map((skill, idx) => (
-                        <span key={idx} className="child-skill-badge">{skill}</span>
-                      ))}
-                    </div>
-                  </div>
-
-                  {/* Trait Balance Adjuster */}
-                  <div className="trait-balance-section">
-                    <h4>⚖️ Trait Balance Adjuster</h4>
-                    <p className="trait-balance-label">Select which parent's traits to emphasize:</p>
-                    <div className="trait-balance-container">
-                      <span className="trait-parent-label">{parentA.name}</span>
-                      <div className="trait-slider-wrapper">
-                        <input 
-                          type="range" 
-                          min="0" 
-                          max="100" 
-                          value={traitBalance}
-                          onChange={(e) => setTraitBalance(parseInt(e.target.value))}
-                          className="trait-slider"
+                      {/* Custom Instructions */}
+                      <div className="custom-instructions">
+                        <label htmlFor="breedInstructions">Add Custom Breeding Instructions (Optional):</label>
+                        <textarea
+                          id="breedInstructions"
+                          placeholder="e.g., Focus on creative problem-solving traits..."
+                          rows={3}
+                          className="instructions-input"
                         />
-                        <div className="slider-value">{traitBalance}% A / {100 - traitBalance}% B</div>
                       </div>
-                      <span className="trait-parent-label">{parentB.name}</span>
-                    </div>
-                    <p className="trait-balance-description">
-                      The child agent will inherit {traitBalance}% traits from {parentA.name} and {100 - traitBalance}% from {parentB.name}
-                    </p>
-                  </div>
-
-                  {/* Child Agent Configuration */}
-                  <div className="child-config-section">
-                    <h4>👶 Configure Child Agent</h4>
-                    
-                    {/* Child Name Input */}
-                    <div className="child-name-input-wrapper">
-                      <label htmlFor="childName">Child Agent Name:</label>
-                      <input
-                        id="childName"
-                        type="text"
-                        value={childAgentName}
-                        onChange={(e) => setChildAgentName(e.target.value)}
-                        placeholder="Enter child agent name"
-                        className="child-name-input"
-                      />
                     </div>
 
-                    {/* Child Image Upload */}
-                    <div className="child-image-upload-wrapper">
-                      <label htmlFor="childImage">Upload Child Agent Image (Optional):</label>
-                      <div className="image-upload-container">
-                        {imagePreview ? (
-                          <div className="image-preview">
-                            <img src={imagePreview} alt="Child agent preview" className="preview-img" />
-                            <button
-                              type="button"
-                              className="remove-image-btn"
-                              onClick={() => {
-                                setImagePreview(null)
-                              }}
-                            >
-                              ✕ Remove
-                            </button>
+                    {/* Right Column */}
+                    <div className="compatibility-right-column">
+                      {/* Predicted Child Skills */}
+                      <div className="predicted-child-box">
+                        <h4>
+                          <svg className="section-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                            <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
+                            <circle cx="9" cy="7" r="4"/>
+                            <path d="M23 21v-2a4 4 0 0 0-3-3.87"/>
+                            <path d="M16 3.13a4 4 0 0 1 0 7.75"/>
+                          </svg>
+                          Predicted Child Skills
+                        </h4>
+                        <div className="child-skills">
+                          {predictedSkills.map((skill, idx) => (
+                            <span key={idx} className="child-skill-badge">{skill}</span>
+                          ))}
+                        </div>
+                      </div>
+
+                      {/* Trait Balance Adjuster */}
+                      <div className="trait-balance-section">
+                        <h4>
+                          <svg className="section-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                            <path d="M12 3v18M3 12h18"/>
+                            <path d="M7 7l10 10M7 17L17 7"/>
+                          </svg>
+                          Trait Balance Adjuster
+                        </h4>
+                        <p className="trait-balance-label">Select which parent's traits to emphasize:</p>
+                        <div className="trait-balance-container">
+                          <div className="trait-parents-header">
+                            <span className="trait-parent-label">{parentA.name}</span>
+                            <span className="trait-parent-label">{parentB.name}</span>
                           </div>
-                        ) : (
-                          <label className="upload-area">
-                            <input
-                              id="childImage"
-                              type="file"
-                              accept="image/*"
-                              onChange={handleImageUpload}
-                              className="file-input-hidden"
-                            />
-                            <span className="upload-icon">📸</span>
-                            <span className="upload-text">Click to upload or drag image</span>
-                          </label>
-                        )}
+                          <div className="trait-slider-wrapper">
+                            <div className="trait-slider-track" style={{ 
+                              background: `linear-gradient(90deg, #f97316 ${traitBalance}%, #14b8a6 ${traitBalance}%)`
+                            }}>
+                              <input 
+                                type="range" 
+                                min="0" 
+                                max="100" 
+                                value={traitBalance}
+                                onChange={(e) => setTraitBalance(parseInt(e.target.value))}
+                                className="trait-slider"
+                              />
+                            </div>
+                            <div className="slider-value">
+                              <span className="slider-value-a">{traitBalance}% A</span>
+                              <span className="slider-value-separator"> / </span>
+                              <span className="slider-value-b">{100 - traitBalance}% B</span>
+                            </div>
+                          </div>
+                        </div>
+                        <p className="trait-balance-description">
+                          The child agent will inherit {traitBalance}% traits from {parentA.name} and {100 - traitBalance}% from {parentB.name}
+                        </p>
+                      </div>
+
+                      {/* Child Agent Configuration */}
+                      <div className="child-config-section">
+                        <h4>
+                          <svg className="section-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                            <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
+                            <circle cx="9" cy="7" r="4"/>
+                            <path d="M23 21v-2a4 4 0 0 0-3-3.87"/>
+                            <path d="M16 3.13a4 4 0 0 1 0 7.75"/>
+                          </svg>
+                          Configure Child Agent
+                        </h4>
+                        
+                        {/* Child Name Input */}
+                        <div className="child-name-input-wrapper">
+                          <label htmlFor="childName">Child Agent Name:</label>
+                          <input
+                            id="childName"
+                            type="text"
+                            value={childAgentName}
+                            onChange={(e) => setChildAgentName(e.target.value)}
+                            placeholder="Enter child agent name"
+                            className="child-name-input"
+                          />
+                        </div>
+
+                        {/* Child Image Upload */}
+                        <div className="child-image-upload-wrapper">
+                          <label htmlFor="childImage">Upload Child Agent Image (Optional):</label>
+                          <div className="image-upload-container">
+                            {imagePreview ? (
+                              <div className="image-preview">
+                                <img src={imagePreview} alt="Child agent preview" className="preview-img" />
+                                <button
+                                  type="button"
+                                  className="remove-image-btn"
+                                  onClick={() => {
+                                    setImagePreview(null)
+                                  }}
+                                >
+                                  ✕ Remove
+                                </button>
+                              </div>
+                            ) : (
+                              <label className="upload-area">
+                                <input
+                                  id="childImage"
+                                  type="file"
+                                  accept="image/*"
+                                  onChange={handleImageUpload}
+                                  className="file-input-hidden"
+                                />
+                                <span className="upload-icon">
+                                  <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                    <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/>
+                                    <circle cx="12" cy="13" r="4"/>
+                                  </svg>
+                                </span>
+                                <span className="upload-text">Click to upload or drag image</span>
+                              </label>
+                            )}
+                          </div>
+                        </div>
                       </div>
                     </div>
                   </div>
 
-                  {/* Custom Instructions */}
-                  <div className="custom-instructions">
-                    <label htmlFor="breedInstructions">Add Custom Breeding Instructions (Optional):</label>
-                    <textarea
-                      id="breedInstructions"
-                      placeholder="e.g., Focus on creative problem-solving traits..."
-                      rows={3}
-                      className="instructions-input"
-                    />
-                  </div>
-
-                  {/* Breed Button */}
+                  {/* Breed Button - Full Width */}
                   <button 
                     className="proceed-breed-btn" 
                     onClick={handleProceedToFusion}
                     disabled={loading}
                   >
-                    {loading ? 'Processing...' : '🎉 Proceed to Breeding'}
+                    {loading ? (
+                      'Processing...'
+                    ) : (
+                      <>
+                        <svg className="button-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                          <polyline points="20 6 9 17 4 12"/>
+                        </svg>
+                        Proceed to Breeding
+                      </>
+                    )}
                   </button>
                 </div>
 
@@ -494,7 +563,9 @@ const BreedScreen = ({ parentA, parentB, onFusionComplete, onBack }: BreedScreen
 
       {step === 'breeding' && (
         <div className="status-section">
-          <div className="spinner">🧬</div>
+          <div className="spinner">
+            <div className="spinner-circle"></div>
+          </div>
           <h3>Breeding in Progress...</h3>
           <p>Fusing genetic traits and generating new agent DNA</p>
         </div>
@@ -502,7 +573,13 @@ const BreedScreen = ({ parentA, parentB, onFusionComplete, onBack }: BreedScreen
 
       {step === 'minting' && (
         <div className="status-section">
-          <div className="spinner">Minting</div>
+          <div className="minting-icon">
+            <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M12 2L2 7l10 5 10-5-10-5z"/>
+              <path d="M2 17l10 5 10-5"/>
+              <path d="M2 12l10 5 10-5"/>
+            </svg>
+          </div>
           <h3>Ready to Mint NFT</h3>
           <p>Sign with your wallet to mint the child agent as an on-chain NFT</p>
           {fusionResult && (
@@ -634,13 +711,50 @@ const BreedScreen = ({ parentA, parentB, onFusionComplete, onBack }: BreedScreen
         }
 
         .spinner {
-          font-size: 4rem;
-          animation: spin 2s linear infinite;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          margin-bottom: 2rem;
+        }
+
+        .spinner-circle {
+          width: 48px;
+          height: 48px;
+          border: 4px solid rgba(139, 92, 246, 0.2);
+          border-top: 4px solid #8b5cf6;
+          border-radius: 50%;
+          animation: spin 1s linear infinite;
+        }
+
+        .minting-icon {
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          margin-bottom: 2rem;
+          color: #8b5cf6;
+          animation: pulse 2s ease-in-out infinite;
+        }
+
+        .minting-icon svg {
+          width: 64px;
+          height: 64px;
+          filter: drop-shadow(0 0 10px rgba(139, 92, 246, 0.5));
         }
 
         @keyframes spin {
-          from { transform: rotate(0deg); }
-          to { transform: rotate(360deg); }
+          0% { transform: rotate(0deg); }
+          100% { transform: rotate(360deg); }
+        }
+
+        @keyframes pulse {
+          0%, 100% {
+            opacity: 1;
+            transform: scale(1);
+          }
+          50% {
+            opacity: 0.7;
+            transform: scale(1.05);
+          }
         }
 
         .fusion-details {
@@ -710,6 +824,7 @@ const BreedScreen = ({ parentA, parentB, onFusionComplete, onBack }: BreedScreen
         .compatibility-section {
           max-width: 1400px;
           width: 100%;
+          margin: 0 auto;
         }
 
         .compatibility-header {
@@ -730,10 +845,12 @@ const BreedScreen = ({ parentA, parentB, onFusionComplete, onBack }: BreedScreen
 
         .compatibility-container {
           display: grid;
-          grid-template-columns: 1fr 2fr 1fr;
+          grid-template-columns: minmax(0, 1fr) minmax(0, 2fr) minmax(0, 1fr);
           gap: 2rem;
           align-items: start;
           margin-top: 2rem;
+          width: 100%;
+          position: relative;
         }
 
         .compatibility-agent {
@@ -787,11 +904,66 @@ const BreedScreen = ({ parentA, parentB, onFusionComplete, onBack }: BreedScreen
         .compatibility-meter {
           display: flex;
           flex-direction: column;
-          gap: 1.5rem;
+          gap: 2rem;
+          width: 100%;
+          min-width: 0;
+        }
+        
+        .meter-display {
+          text-align: center;
+          width: 100%;
+          max-width: 600px;
+          margin: 0 auto;
+        }
+
+        .compatibility-sections-grid {
+          display: grid;
+          grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+          gap: 2rem;
+          margin-top: 2rem;
+          width: 100%;
+        }
+        
+        .proceed-breed-btn {
+          margin-top: 2rem;
+        }
+        
+        /* Align cards with parent agents - break out of middle column to span full width */
+        @media (min-width: 1025px) {
+          .compatibility-sections-grid {
+            position: relative;
+            /* Column 2 is 50% of container, move left by 50% (to reach left edge) + 2rem gap */
+            left: calc(-50% - 2rem);
+            /* Expand to span all 3 columns: 200% of column 2 width + 4rem for gaps */
+            width: calc(200% + 4rem);
+          }
+        }
+
+        .compatibility-left-column {
+          display: flex;
+          flex-direction: column;
+          gap: 2rem;
+          min-width: 0;
+        }
+
+        .compatibility-right-column {
+          display: flex;
+          flex-direction: column;
+          gap: 2rem;
+          min-width: 0;
+        }
+
+        @media (max-width: 1024px) {
+          .compatibility-sections-grid {
+            grid-template-columns: 1fr;
+          }
         }
 
         .meter-display {
           text-align: center;
+          width: 100%;
+          max-width: 600px;
+          margin: 0 auto;
         }
 
         .score-circle {
@@ -852,56 +1024,77 @@ const BreedScreen = ({ parentA, parentB, onFusionComplete, onBack }: BreedScreen
         .analysis-box {
           background: rgba(139, 92, 246, 0.05);
           border: 1px solid rgba(139, 92, 246, 0.2);
-          border-radius: 12px;
-          padding: 1.5rem;
+          border-radius: 16px;
+          padding: 2rem;
+          width: 100%;
+          min-width: 0;
         }
 
         .analysis-box h4 {
           color: #8b5cf6;
-          margin: 0 0 0.75rem 0;
-          font-size: 0.95rem;
+          margin: 0 0 1rem 0;
+          font-size: 1rem;
+          display: flex;
+          align-items: center;
+          gap: 0.5rem;
+        }
+
+        .section-icon {
+          flex-shrink: 0;
+          color: currentColor;
         }
 
         .analysis-box p {
           color: #cbd5e1;
           margin: 0;
-          line-height: 1.6;
-          font-size: 0.9rem;
+          line-height: 1.7;
+          font-size: 0.95rem;
         }
 
         .predicted-child-box {
           background: rgba(99, 102, 241, 0.05);
           border: 1px solid rgba(99, 102, 241, 0.2);
-          border-radius: 12px;
-          padding: 1.5rem;
+          border-radius: 16px;
+          padding: 2rem;
+          width: 100%;
+          min-width: 0;
         }
 
         .predicted-child-box h4 {
           color: #6366f1;
-          margin: 0 0 1rem 0;
-          font-size: 0.95rem;
+          margin: 0 0 1.25rem 0;
+          font-size: 1rem;
+          display: flex;
+          align-items: center;
+          gap: 0.5rem;
         }
 
         .child-skills {
           display: flex;
           flex-wrap: wrap;
-          gap: 0.5rem;
+          gap: 0.75rem;
         }
 
         .child-skill-badge {
           background: linear-gradient(135deg, rgba(99, 102, 241, 0.3) 0%, rgba(139, 92, 246, 0.3) 100%);
           border: 1px solid rgba(139, 92, 246, 0.4);
           color: #cbd5e1;
-          padding: 0.4rem 0.8rem;
+          padding: 0.5rem 1rem;
           border-radius: 20px;
-          font-size: 0.8rem;
+          font-size: 0.85rem;
           font-weight: 500;
         }
 
         .custom-instructions {
           display: flex;
           flex-direction: column;
-          gap: 0.5rem;
+          gap: 0.75rem;
+          width: 100%;
+          min-width: 0;
+          background: rgba(139, 92, 246, 0.05);
+          border: 1px solid rgba(139, 92, 246, 0.2);
+          border-radius: 16px;
+          padding: 2rem;
         }
 
         .custom-instructions label {
@@ -938,14 +1131,22 @@ const BreedScreen = ({ parentA, parentB, onFusionComplete, onBack }: BreedScreen
           background: linear-gradient(135deg, #8b5cf6 0%, #6366f1 100%);
           border: none;
           color: white;
-          padding: 1rem;
+          padding: 1.25rem;
           border-radius: 12px;
           font-size: 1rem;
           font-weight: 600;
           cursor: pointer;
           transition: all 0.3s;
-          margin-top: 1rem;
+          margin-top: 2rem;
           box-shadow: 0 4px 15px rgba(139, 92, 246, 0.3);
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          gap: 0.5rem;
+        }
+
+        .button-icon {
+          flex-shrink: 0;
         }
 
         .proceed-breed-btn:hover:not(:disabled) {
@@ -968,9 +1169,14 @@ const BreedScreen = ({ parentA, parentB, onFusionComplete, onBack }: BreedScreen
         }
 
         .loading-spinner {
-          font-size: 5rem;
           margin-bottom: 1.5rem;
           animation: spin 2s linear infinite;
+          color: #8b5cf6;
+        }
+
+        .loading-spinner svg {
+          width: 64px;
+          height: 64px;
         }
 
         .loading-container h3 {
@@ -988,120 +1194,201 @@ const BreedScreen = ({ parentA, parentB, onFusionComplete, onBack }: BreedScreen
         .trait-balance-section {
           background: rgba(99, 102, 241, 0.05);
           border: 1px solid rgba(99, 102, 241, 0.2);
-          border-radius: 12px;
-          padding: 1.5rem;
+          border-radius: 16px;
+          padding: 2rem;
+          width: 100%;
+          min-width: 0;
+          overflow: visible;
         }
 
         .trait-balance-section h4 {
           color: #6366f1;
-          margin: 0 0 0.5rem 0;
-          font-size: 0.95rem;
+          margin: 0 0 1rem 0;
+          font-size: 1rem;
+          display: flex;
+          align-items: center;
+          gap: 0.5rem;
         }
 
         .trait-balance-label {
           color: #cbd5e1;
-          font-size: 0.85rem;
-          margin: 0 0 1rem 0;
+          font-size: 0.9rem;
+          margin: 0 0 1.25rem 0;
+          line-height: 1.5;
         }
 
         .trait-balance-container {
           display: flex;
-          align-items: center;
+          flex-direction: column;
           gap: 1rem;
-          margin-bottom: 1rem;
+          margin-bottom: 1.25rem;
+          width: 100%;
+        }
+
+        .trait-parents-header {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          width: 100%;
+          gap: 1rem;
         }
 
         .trait-parent-label {
           color: #94a3b8;
-          font-size: 0.8rem;
+          font-size: 0.85rem;
           font-weight: 500;
-          min-width: 80px;
           text-align: center;
+          word-wrap: break-word;
+          overflow-wrap: break-word;
+          white-space: normal;
+          line-height: 1.4;
+          flex: 1;
+          max-width: 45%;
         }
 
         .trait-slider-wrapper {
-          flex: 1;
+          width: 100%;
           display: flex;
           flex-direction: column;
           gap: 0.5rem;
         }
 
-        .trait-slider {
+        .trait-slider-track {
+          position: relative;
           width: 100%;
-          height: 8px;
-          border-radius: 5px;
-          background: linear-gradient(90deg, rgba(139, 92, 246, 0.3) 0%, rgba(99, 102, 241, 0.3) 100%);
-          outline: none;
-          -webkit-appearance: none;
-          appearance: none;
+          height: 12px;
+          border-radius: 6px;
+          background: linear-gradient(90deg, #f97316 0%, #14b8a6 100%);
+          border: 1px solid rgba(255, 255, 255, 0.1);
+          overflow: visible;
+          padding: 4px 0;
+          margin: 4px 0;
         }
 
+        .trait-slider {
+          position: absolute;
+          top: 50%;
+          left: 0;
+          transform: translateY(-50%);
+          width: 100%;
+          height: 12px;
+          border-radius: 6px;
+          outline: none !important;
+          border: none;
+          -webkit-appearance: none;
+          appearance: none;
+          background: transparent;
+          z-index: 2;
+          cursor: pointer;
+          margin: 0;
+        }
+        
+        .trait-slider:focus {
+          outline: none !important;
+          box-shadow: none;
+        }
+        
+        .trait-slider:focus-visible {
+          outline: none !important;
+        }
+        
         .trait-slider::-webkit-slider-thumb {
           -webkit-appearance: none;
           appearance: none;
           width: 20px;
           height: 20px;
           border-radius: 50%;
-          background: linear-gradient(135deg, #8b5cf6 0%, #6366f1 100%);
+          background: linear-gradient(135deg, #ffffff 0%, #e2e8f0 100%);
+          border: 2px solid #8b5cf6;
           cursor: pointer;
-          box-shadow: 0 0 10px rgba(139, 92, 246, 0.4);
+          box-shadow: 0 0 10px rgba(139, 92, 246, 0.6), 0 2px 4px rgba(0, 0, 0, 0.3);
           transition: all 0.2s;
         }
-
+        
         .trait-slider::-webkit-slider-thumb:hover {
-          box-shadow: 0 0 15px rgba(139, 92, 246, 0.6);
-          transform: scale(1.1);
+          box-shadow: 0 0 15px rgba(139, 92, 246, 0.8), 0 2px 6px rgba(0, 0, 0, 0.4);
+          transform: scale(1.15);
         }
-
+        
         .trait-slider::-moz-range-thumb {
           width: 20px;
           height: 20px;
           border-radius: 50%;
-          background: linear-gradient(135deg, #8b5cf6 0%, #6366f1 100%);
+          background: linear-gradient(135deg, #ffffff 0%, #e2e8f0 100%);
+          border: 2px solid #8b5cf6;
           cursor: pointer;
-          box-shadow: 0 0 10px rgba(139, 92, 246, 0.4);
-          border: none;
+          box-shadow: 0 0 10px rgba(139, 92, 246, 0.6), 0 2px 4px rgba(0, 0, 0, 0.3);
           transition: all 0.2s;
         }
-
+        
         .trait-slider::-moz-range-thumb:hover {
-          box-shadow: 0 0 15px rgba(139, 92, 246, 0.6);
-          transform: scale(1.1);
+          box-shadow: 0 0 15px rgba(139, 92, 246, 0.8), 0 2px 6px rgba(0, 0, 0, 0.4);
+          transform: scale(1.15);
+        }
+        
+        .trait-slider::-moz-range-track {
+          background: transparent;
+        }
+        
+        .trait-slider::-webkit-slider-runnable-track {
+          background: transparent;
         }
 
         .slider-value {
           text-align: center;
-          color: #8b5cf6;
           font-size: 0.85rem;
           font-weight: 600;
           font-family: 'Space Mono', monospace;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          gap: 0.25rem;
+        }
+        
+        .slider-value-a {
+          color: #f97316;
+        }
+        
+        .slider-value-separator {
+          color: #94a3b8;
+        }
+        
+        .slider-value-b {
+          color: #14b8a6;
         }
 
         .trait-balance-description {
           color: #94a3b8;
-          font-size: 0.85rem;
+          font-size: 0.9rem;
           margin: 0;
-          line-height: 1.5;
+          line-height: 1.6;
+          word-wrap: break-word;
+          overflow-wrap: break-word;
         }
 
         .child-config-section {
           background: rgba(139, 92, 246, 0.05);
           border: 1px solid rgba(139, 92, 246, 0.2);
-          border-radius: 12px;
-          padding: 1.5rem;
+          border-radius: 16px;
+          padding: 2rem;
+          width: 100%;
+          min-width: 0;
         }
 
         .child-config-section h4 {
           color: #8b5cf6;
-          margin: 0 0 1rem 0;
-          font-size: 0.95rem;
+          margin: 0 0 1.25rem 0;
+          font-size: 1rem;
+          display: flex;
+          align-items: center;
+          gap: 0.5rem;
         }
 
         .child-name-input-wrapper {
           display: flex;
           flex-direction: column;
-          gap: 0.5rem;
-          margin-bottom: 1.5rem;
+          gap: 0.75rem;
+          margin-bottom: 1.75rem;
         }
 
         .child-name-input-wrapper label {
@@ -1135,8 +1422,8 @@ const BreedScreen = ({ parentA, parentB, onFusionComplete, onBack }: BreedScreen
         .child-image-upload-wrapper {
           display: flex;
           flex-direction: column;
-          gap: 0.5rem;
-          margin-bottom: 1.5rem;
+          gap: 0.75rem;
+          margin-bottom: 0;
         }
 
         .child-image-upload-wrapper label {
@@ -1166,12 +1453,18 @@ const BreedScreen = ({ parentA, parentB, onFusionComplete, onBack }: BreedScreen
         }
 
         .upload-icon {
-          font-size: 2rem;
           transition: transform 0.2s;
+          color: #94a3b8;
+        }
+
+        .upload-icon svg {
+          width: 32px;
+          height: 32px;
         }
 
         .upload-area:hover .upload-icon {
           transform: scale(1.1);
+          color: #8b5cf6;
         }
 
         .upload-text {
@@ -1217,3 +1510,4 @@ const BreedScreen = ({ parentA, parentB, onFusionComplete, onBack }: BreedScreen
 }
 
 export default BreedScreen
+

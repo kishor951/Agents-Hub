@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { useWallet } from '@meshsdk/react'
 import { Agent } from '../types'
 import { getUserAgents } from '../utils/walletAgents'
@@ -17,6 +17,30 @@ const BreedSelection = ({ onStartBreeding }: BreedSelectionProps) => {
   const [currentSentence, setCurrentSentence] = useState(0)
   const [isAnimating, setIsAnimating] = useState(false)
   const [loading, setLoading] = useState(false)
+  const breedingSectionRef = useRef<HTMLDivElement>(null)
+
+  // Get generation color (same as AgentCard)
+  const getGenerationColor = (generation: number) => {
+    switch (generation) {
+      case 1:
+        return { hex: '#FF6B35', rgb: '255, 107, 53' }; // Orange
+      case 2:
+        return { hex: '#4ECDC4', rgb: '78, 205, 196' }; // Teal
+      case 3:
+        return { hex: '#45B7D1', rgb: '69, 183, 209' }; // Blue
+      case 4:
+        return { hex: '#96CEB4', rgb: '150, 206, 180' }; // Green
+      default:
+        return { hex: '#FECA57', rgb: '254, 202, 87' }; // Yellow for generation 5+
+    }
+  }
+
+  // Truncate description text
+  const truncateDescription = (text: string, maxLength: number = 100) => {
+    if (!text) return ''
+    if (text.length <= maxLength) return text
+    return text.slice(0, maxLength - 3) + '...'
+  }
 
   // Load user's agents
   const loadUserAgents = useCallback(async () => {
@@ -135,11 +159,40 @@ const BreedSelection = ({ onStartBreeding }: BreedSelectionProps) => {
   const handleSelectParent = (agent: Agent) => {
     setSelectedParents(prev => {
       const [a, b] = prev
-      if (!a) return [agent, b]
-      if (!b) return [a, agent]
-      return [agent, b] // Replace second if both selected
+      
+      // Toggle deselection: if clicking on an already selected agent, deselect it
+      if (a?.id === agent.id) {
+        return [null, b] // Deselect Parent A
+      }
+      if (b?.id === agent.id) {
+        return [a, null] // Deselect Parent B
+      }
+      
+      // Select logic: fill empty slots first
+      if (!a) {
+        return [agent, b]
+      }
+      if (!b) {
+        return [a, agent]
+      }
+      
+      // If both are selected and clicking a new agent, replace Parent A
+      return [agent, b]
     })
   }
+
+  // Auto-scroll to breeding section when both parents are selected
+  useEffect(() => {
+    if (selectedParents[0] && selectedParents[1] && breedingSectionRef.current) {
+      // Small delay to ensure DOM is updated
+      setTimeout(() => {
+        breedingSectionRef.current?.scrollIntoView({ 
+          behavior: 'smooth', 
+          block: 'start' 
+        })
+      }, 100)
+    }
+  }, [selectedParents])
 
   const handleBreedSelected = () => {
     if (selectedParents[0] && selectedParents[1]) {
@@ -221,7 +274,8 @@ const BreedSelection = ({ onStartBreeding }: BreedSelectionProps) => {
           </div>
         )}
         {loading ? (
-          <div className="empty-agents">
+          <div className="empty-agents loading-state">
+            <div className="loading-spinner">🧬</div>
             <p>Loading your agents...</p>
             <p>Discovering agents from your wallet...</p>
           </div>
@@ -238,34 +292,56 @@ const BreedSelection = ({ onStartBreeding }: BreedSelectionProps) => {
         ) : (
           <>
             <div className="agents-grid">
-              {(filteredAgents || agents).map(agent => (
-                <div key={agent.id} className="agent-card">
-                  <div className="agent-header">
-                    <div className="agent-image-wrapper">
-                      {agent.imageUrl && agent.imageUrl.startsWith('http') ? (
-                        <img src={agent.imageUrl} alt={agent.name} />
-                      ) : (
-                        <div className="agent-emoji">{agent.imageUrl || agent.name.charAt(0)}</div>
-                      )}
+              {(filteredAgents || agents).map(agent => {
+                const genColor = getGenerationColor(agent.generation || 0)
+                return (
+                  <div 
+                    key={agent.id} 
+                    className="agent-card"
+                    style={{ '--card-bg-color': genColor.rgb } as React.CSSProperties}
+                  >
+                    {/* Generation Badge - Top Right */}
+                    <div className="generation-badge" style={{ backgroundColor: genColor.hex }}>
+                      <svg className="gen-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2z"/>
+                        <path d="M12 6v12"/>
+                        <path d="M8 10h8"/>
+                        <path d="M8 14h8"/>
+                        <path d="M10 8h4"/>
+                        <path d="M10 16h4"/>
+                      </svg>
+                      <span className="gen-text">Gen {agent.generation || 0}</span>
                     </div>
-                    <h3>{agent.name}</h3>
+
+                    <div className="agent-header">
+                      <div className="agent-image-wrapper">
+                        {agent.imageUrl && agent.imageUrl.startsWith('http') ? (
+                          <img src={agent.imageUrl} alt={agent.name} />
+                        ) : (
+                          <div className="agent-emoji">{agent.imageUrl || agent.name.charAt(0)}</div>
+                        )}
+                      </div>
+                      <h3>{agent.name}</h3>
+                    </div>
+                    <p className="agent-description" title={agent.purpose}>
+                      {truncateDescription(agent.purpose || '', 100)}
+                    </p>
+                    <div className="agent-actions">
+                      <button
+                        className={`select-btn ${selectedParents.includes(agent) ? 'selected' : ''}`}
+                        onClick={() => handleSelectParent(agent)}
+                      >
+                        {selectedParents.includes(agent) ? 'Selected' : 'Select for Breeding'}
+                      </button>
+                    </div>
                   </div>
-                  <p>{agent.purpose}</p>
-                  <div className="agent-actions">
-                    <button
-                      className={`select-btn ${selectedParents.includes(agent) ? 'selected' : ''}`}
-                      onClick={() => handleSelectParent(agent)}
-                    >
-                      {selectedParents.includes(agent) ? 'Selected' : 'Select for Breeding'}
-                    </button>
-                  </div>
-                </div>
-              ))}
+                )
+              })}
             </div>
 
             {/* Breeding Section - Only show when both parents are selected */}
             {selectedParents[0] && selectedParents[1] && (
-              <div className="breeding-section">
+              <div className="breeding-section" ref={breedingSectionRef}>
                 <h3>Selected Parents</h3>
                 <div className="selected-parents">
                   <div className="parent-slot">
@@ -507,6 +583,30 @@ const BreedSelection = ({ onStartBreeding }: BreedSelectionProps) => {
           margin: 0.5rem 0;
         }
 
+        .loading-state {
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          justify-content: center;
+          min-height: 300px;
+        }
+
+        .loading-spinner {
+          font-size: 4rem;
+          margin-bottom: 1.5rem;
+          animation: spin 2s linear infinite;
+          filter: drop-shadow(0 0 10px rgba(139, 92, 246, 0.5));
+        }
+
+        @keyframes spin {
+          from {
+            transform: rotate(0deg);
+          }
+          to {
+            transform: rotate(360deg);
+          }
+        }
+
         .agents-grid {
           display: grid;
           grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
@@ -515,21 +615,22 @@ const BreedSelection = ({ onStartBreeding }: BreedSelectionProps) => {
         }
 
         .agent-card {
-          background: linear-gradient(135deg, rgba(139, 92, 246, 0.05) 0%, rgba(99, 102, 241, 0.05) 100%);
+          background: linear-gradient(135deg, rgba(var(--card-bg-color, 139, 92, 246), 0.08) 0%, rgba(var(--card-bg-color, 99, 102, 241), 0.08) 100%);
           backdrop-filter: blur(10px);
           -webkit-backdrop-filter: blur(10px);
-          border: 1px solid rgba(139, 92, 246, 0.2);
+          border: 1px solid rgba(var(--card-bg-color, 139, 92, 246), 0.2);
           border-radius: 16px;
           padding: 1.5rem;
           transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
           box-shadow: 0 4px 15px rgba(139, 92, 246, 0.1);
+          position: relative;
         }
 
         .agent-card:hover {
           transform: translateY(-4px);
-          border-color: rgba(139, 92, 246, 0.4);
-          box-shadow: 0 0 30px rgba(139, 92, 246, 0.3);
-          background: linear-gradient(135deg, rgba(139, 92, 246, 0.1) 0%, rgba(99, 102, 241, 0.1) 100%);
+          border-color: rgba(var(--card-bg-color, 139, 92, 246), 0.4);
+          box-shadow: 0 0 30px rgba(var(--card-bg-color, 139, 92, 246), 0.3);
+          background: linear-gradient(135deg, rgba(var(--card-bg-color, 139, 92, 246), 0.15) 0%, rgba(var(--card-bg-color, 99, 102, 241), 0.15) 100%);
         }
 
         .agent-header {
@@ -584,6 +685,49 @@ const BreedSelection = ({ onStartBreeding }: BreedSelectionProps) => {
           font-size: 0.875rem;
           margin: 1rem 0;
           text-align: center;
+        }
+
+        .agent-description {
+          color: var(--color-text-secondary, #8F90A6);
+          font-size: 0.875rem;
+          margin: 1rem 0;
+          text-align: center;
+          line-height: 1.5;
+          display: -webkit-box;
+          -webkit-line-clamp: 3;
+          -webkit-box-orient: vertical;
+          overflow: hidden;
+          text-overflow: ellipsis;
+          min-height: 3.9375rem; /* 3 lines * 1.5 line-height * 0.875rem */
+        }
+
+        /* Generation Badge - Top Right */
+        .generation-badge {
+          position: absolute;
+          top: 1rem;
+          right: 1rem;
+          display: flex;
+          align-items: center;
+          gap: 0.25rem;
+          color: #0A0B10;
+          padding: 0.375rem 0.75rem;
+          border-radius: 20px;
+          font-size: 0.75rem;
+          font-weight: 700;
+          font-family: var(--font-mono, 'Space Mono', monospace);
+          letter-spacing: 0.05em;
+          box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+          z-index: 3;
+        }
+
+        .gen-icon {
+          width: 16px;
+          height: 16px;
+          flex-shrink: 0;
+        }
+
+        .gen-text {
+          font-weight: 800;
         }
 
         .agent-actions {
