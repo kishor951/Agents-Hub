@@ -14,6 +14,7 @@ import ChildAgentView from './components/ChildAgentView'
 import WalletTest from './components/WalletTest'
 import MyAgents from './components/MyAgents'
 import LandingPage from './components/LandingPage'
+import PageTransition from './components/PageTransition'
 import { Agent } from './types'
 
 function AppContent() {
@@ -29,8 +30,18 @@ function AppContent() {
   React.useEffect(() => {
     if (isCreatePage) {
       document.body.classList.add('create-mode')
+      // Change favicon to purple
+      const favicon = document.querySelector("link[rel='icon']") as HTMLLinkElement
+      if (favicon) {
+        favicon.href = '/favicon-purple.svg'
+      }
     } else {
       document.body.classList.remove('create-mode')
+      // Change favicon back to cyan
+      const favicon = document.querySelector("link[rel='icon']") as HTMLLinkElement
+      if (favicon) {
+        favicon.href = '/favicon.svg'
+      }
     }
   }, [isCreatePage])
 
@@ -57,6 +68,7 @@ function AppContent() {
 
   return (
     <div className={`app ${isCreatePage ? 'create-mode' : ''}`}>
+      <PageTransition />
       <NavigationBar 
         walletAddress={walletAddress} 
         onConnect={handleWalletConnect}
