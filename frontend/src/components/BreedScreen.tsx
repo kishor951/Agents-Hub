@@ -30,23 +30,24 @@ const BreedScreen = ({ parentA, parentB, onFusionComplete, onBack }: BreedScreen
     ? compatibilityScore.predicted_skills
     : [...new Set([...parentA.skills.slice(0, 3), ...parentB.skills.slice(0, 3)])]
 
+  const sentences = [
+    { text: "Should Humans have all the Fun?", highlight: "all the Fun?" },
+    { text: "Now AI agents can date,", highlight: "date," },
+    { text: "and also Breed!", highlight: "Breed!" }
+  ]
+
   // Animate text change every 5 seconds
   useEffect(() => {
     const timer = setTimeout(() => {
       setIsAnimating(true)
       setTimeout(() => {
-        setCurrentSentence(prev => (prev + 1) % 2)
+        setCurrentSentence(prev => (prev + 1) % sentences.length)
         setIsAnimating(false)
       }, 500) // Half of animation duration
     }, 5000)
 
     return () => clearTimeout(timer)
   }, [currentSentence])
-
-  const sentences = [
-    { text: "Should Humans have all the Fun?", highlight: "all the Fun?" },
-    { text: "Now, AI Agents can also Breed!", highlight: "Breed!" }
-  ]
 
   const handleSignAndSubmit = async () => {
     if (!fusionResult || !connected || !wallet) {
@@ -57,11 +58,26 @@ const BreedScreen = ({ parentA, parentB, onFusionComplete, onBack }: BreedScreen
     setStep('signing')
 
     try {
-      // Get parent generations (default to 1 for first generation agents)
-      const parentA_gen = parentA.generation || 1
-      const parentB_gen = parentB.generation || 1
+      // Get parent generations (genesis agents are generation 1, treat 0 as 1 for legacy agents)
+      const parentA_gen = parentA.generation && parentA.generation > 0 ? parentA.generation : 1
+      const parentB_gen = parentB.generation && parentB.generation > 0 ? parentB.generation : 1
       const childGeneration = Math.max(parentA_gen, parentB_gen) + 1
+      
+      console.log('🧬 [Breeding] Generation calculation:')
+      console.log(`   Parent A: ${parentA.name} - raw: ${parentA.generation}, normalized: ${parentA_gen}`)
+      console.log(`   Parent B: ${parentB.name} - raw: ${parentB.generation}, normalized: ${parentB_gen}`)
+      console.log(`   Child generation: ${childGeneration} (max(${parentA_gen}, ${parentB_gen}) + 1)`)
 
+      console.log('📝 [BreedScreen] Creating metadata for bred agent...')
+      console.log(`   Child Name: ${fusionResult.metadata.name}`)
+      console.log(`   IPFS CID: ${fusionResult.ipfsCid}`)
+      console.log(`   Masumi DID: ${fusionResult.metadata.masumiDid}`)
+      console.log(`   Parent A ID: ${parentA.id.substring(0, 20)}...`)
+      console.log(`   Parent B ID: ${parentB.id.substring(0, 20)}...`)
+      console.log(`   Parent A Gen: ${parentA_gen}`)
+      console.log(`   Parent B Gen: ${parentB_gen}`)
+      console.log(`   Child Gen: ${childGeneration}`)
+      
       // Create metadata for bred agent with all child data
       const metadata = createBredAgentMetadata(
         fusionResult.metadata.name,
@@ -73,9 +89,17 @@ const BreedScreen = ({ parentA, parentB, onFusionComplete, onBack }: BreedScreen
         parentB_gen
       )
 
+      console.log('✅ [BreedScreen] Metadata created:')
+      console.log(`   brain_cid: ${metadata.properties.brain_cid}`)
+      console.log(`   genetic_hash: ${metadata.properties.genetic_hash}`)
+      console.log(`   masumi_did: ${metadata.properties.masumi_did}`)
+      console.log(`   generation: ${metadata.properties.generation}`)
+      console.log(`   parents: ${metadata.properties.parents?.join(', ') || 'none'}`)
+
       // Add image to metadata if available
       if (fusionResult.imageIpfsCid) {
         metadata.image = `ipfs://${fusionResult.imageIpfsCid}`
+        console.log(`   image: ${metadata.image}`)
       }
 
       // Mint using mintBredAgent (same as Reference)
@@ -270,6 +294,16 @@ const BreedScreen = ({ parentA, parentB, onFusionComplete, onBack }: BreedScreen
         }
       }
 
+      console.log('✅ [BreedScreen] Breeding completed successfully!')
+      console.log(`   IPFS Hash: ${breedingResult.ipfs_hash}`)
+      console.log(`   Masumi DID: ${breedingResult.masumi_did}`)
+      console.log(`   Child Name: ${childAgentName}`)
+      console.log(`   Child Purpose: ${breedingResult.child_purpose?.substring(0, 50) || 'N/A'}...`)
+      console.log(`   Child Instructions: ${breedingResult.child_instructions?.substring(0, 50) || 'N/A'}...`)
+      console.log(`   Child Skills: ${breedingResult.child_skills?.join(', ') || 'None'}`)
+      console.log(`   Child LLM Model: ${breedingResult.child_llm_model || 'N/A'}`)
+      console.log(`   Image IPFS CID: ${childImageIpfsCid || 'None'}`)
+      
       // Store breeding result with all child data
       setFusionResult({
         ipfsCid: breedingResult.ipfs_hash,
@@ -285,6 +319,8 @@ const BreedScreen = ({ parentA, parentB, onFusionComplete, onBack }: BreedScreen
           masumiDid: breedingResult.masumi_did
         }
       })
+      
+      console.log('💾 [BreedScreen] Fusion result stored in state')
 
       setStep('minting')
     } catch (error: any) {

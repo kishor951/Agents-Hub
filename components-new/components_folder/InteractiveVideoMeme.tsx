@@ -17,7 +17,6 @@ const InteractiveVideoMeme = ({ videoSrc, title, description }: InteractiveVideo
   const [isCompleted, setIsCompleted] = useState(false)
   const [videoDuration, setVideoDuration] = useState(0)
   const [isVideoReady, setIsVideoReady] = useState(false)
-  const [videoError, setVideoError] = useState<string | null>(null)
   const [feedback, setFeedback] = useState<string>('')
   const [showFeedback, setShowFeedback] = useState(false)
   const [showIdleHint, setShowIdleHint] = useState(true)
@@ -30,54 +29,15 @@ const InteractiveVideoMeme = ({ videoSrc, title, description }: InteractiveVideo
     const handleLoadedMetadata = () => {
       setVideoDuration(video.duration)
       setIsVideoReady(true)
-      setVideoError(null)
     }
 
-    const handleError = (e: Event) => {
-      const videoElement = e.target as HTMLVideoElement
-      const error = videoElement.error
-      let errorMessage = 'Video failed to load'
-      
-      if (error) {
-        switch (error.code) {
-          case error.MEDIA_ERR_ABORTED:
-            errorMessage = 'Video loading was aborted'
-            break
-          case error.MEDIA_ERR_NETWORK:
-            errorMessage = 'Network error while loading video'
-            break
-          case error.MEDIA_ERR_DECODE:
-            errorMessage = 'Video decoding error'
-            break
-          case error.MEDIA_ERR_SRC_NOT_SUPPORTED:
-            errorMessage = 'Video format not supported or file not found'
-            break
-          default:
-            errorMessage = `Video error (code: ${error.code})`
-        }
-      }
-      
-      console.error('❌ Video failed to load:', {
-        error,
-        src: videoSrc,
-        message: errorMessage,
-        networkState: videoElement.networkState,
-        readyState: videoElement.readyState
-      })
-      
-      setVideoError(errorMessage)
-      setIsVideoReady(false)
+    const handleError = (e: ErrorEvent) => {
+      console.error('❌ Video failed to load:', e)
     }
 
-    // Reset error state when video source changes
-    setVideoError(null)
-    setIsVideoReady(false)
-    
     video.addEventListener('loadedmetadata', handleLoadedMetadata)
     video.addEventListener('error', handleError)
     
-    // Set the source and load
-    video.src = videoSrc
     video.load()
     
     return () => {
@@ -86,10 +46,8 @@ const InteractiveVideoMeme = ({ videoSrc, title, description }: InteractiveVideo
     }
   }, [videoSrc])
 
-  const handleMouseDown = (e: React.MouseEvent) => {
+  const handleMouseDown = () => {
     if (!isVideoReady || isCompleted) return
-    e.preventDefault()
-    e.stopPropagation()
     setIsDragging(true)
     setShowIdleHint(false)
     
@@ -101,8 +59,6 @@ const InteractiveVideoMeme = ({ videoSrc, title, description }: InteractiveVideo
 
   const handleMouseMove = (e: MouseEvent) => {
     if (!isDragging || !containerRef.current) return
-    e.preventDefault()
-    e.stopPropagation()
 
     const container = containerRef.current
     const rect = container.getBoundingClientRect()
@@ -134,10 +90,8 @@ const InteractiveVideoMeme = ({ videoSrc, title, description }: InteractiveVideo
     }
   }
 
-  const handleTouchStart = (e: React.TouchEvent) => {
+  const handleTouchStart = () => {
     if (!isVideoReady || isCompleted) return
-    e.preventDefault()
-    e.stopPropagation()
     setIsDragging(true)
     setShowIdleHint(false)
     
@@ -149,8 +103,6 @@ const InteractiveVideoMeme = ({ videoSrc, title, description }: InteractiveVideo
 
   const handleTouchMove = (e: TouchEvent) => {
     if (!isDragging || !containerRef.current) return
-    e.preventDefault()
-    e.stopPropagation()
 
     const container = containerRef.current
     const rect = container.getBoundingClientRect()
@@ -234,18 +186,8 @@ const InteractiveVideoMeme = ({ videoSrc, title, description }: InteractiveVideo
         
         {!isVideoReady && (
           <div className="video-placeholder">
-            {videoError ? (
-              <>
-                <div className="error-icon">⚠️</div>
-                <p>{videoError}</p>
-                <p className="error-detail">Check console for details</p>
-              </>
-            ) : (
-              <>
-                <div className="loading-spinner">🎬</div>
-                <p>Loading video...</p>
-              </>
-            )}
+            <div className="loading-spinner">🎬</div>
+            <p>Loading video...</p>
           </div>
         )}
       </div>
@@ -299,10 +241,6 @@ const InteractiveVideoMeme = ({ videoSrc, title, description }: InteractiveVideo
           gap: 1.5rem;
           width: 100%;
           max-width: 800px;
-          user-select: none;
-          -webkit-user-select: none;
-          -moz-user-select: none;
-          -ms-user-select: none;
         }
 
         .video-container {
@@ -353,17 +291,6 @@ const InteractiveVideoMeme = ({ videoSrc, title, description }: InteractiveVideo
           font-size: 0.875rem;
         }
 
-        .error-icon {
-          font-size: 2.5rem;
-          margin-bottom: 0.5rem;
-        }
-
-        .error-detail {
-          font-size: 0.75rem;
-          color: rgba(255, 255, 255, 0.5);
-          margin-top: 0.5rem;
-        }
-
         .video-controls {
           display: flex;
           flex-direction: column;
@@ -395,17 +322,6 @@ const InteractiveVideoMeme = ({ videoSrc, title, description }: InteractiveVideo
           overflow: hidden;
           cursor: grab;
           transition: all 0.3s ease;
-          user-select: none;
-          -webkit-user-select: none;
-          -moz-user-select: none;
-          -ms-user-select: none;
-          -webkit-tap-highlight-color: transparent;
-          -webkit-touch-callout: none;
-          outline: none;
-        }
-
-        .swipe-container:active {
-          cursor: grabbing;
         }
 
         .swipe-container:hover:not(.completed) {
@@ -453,18 +369,10 @@ const InteractiveVideoMeme = ({ videoSrc, title, description }: InteractiveVideo
           transition: all 0.05s linear;
           box-shadow: 0 4px 12px rgba(0, 240, 255, 0.3);
           z-index: 10;
-          user-select: none;
-          -webkit-user-select: none;
-          -moz-user-select: none;
-          -ms-user-select: none;
-          -webkit-tap-highlight-color: transparent;
-          -webkit-touch-callout: none;
-          outline: none;
         }
 
         .swipe-thumb.dragging {
           box-shadow: 0 6px 20px rgba(0, 240, 255, 0.5);
-          cursor: grabbing;
         }
 
         .swipe-thumb.idle-hint {
@@ -491,11 +399,6 @@ const InteractiveVideoMeme = ({ videoSrc, title, description }: InteractiveVideo
           align-items: center;
           justify-content: center;
           animation: slideArrow 1.2s ease-in-out infinite;
-          user-select: none;
-          -webkit-user-select: none;
-          -moz-user-select: none;
-          -ms-user-select: none;
-          pointer-events: none;
         }
 
         @keyframes slideArrow {
@@ -521,11 +424,6 @@ const InteractiveVideoMeme = ({ videoSrc, title, description }: InteractiveVideo
           white-space: nowrap;
           z-index: 5;
           transition: opacity 0.2s ease;
-          user-select: none;
-          -webkit-user-select: none;
-          -moz-user-select: none;
-          -ms-user-select: none;
-          pointer-events: none;
         }
 
         .swipe-text.hide {

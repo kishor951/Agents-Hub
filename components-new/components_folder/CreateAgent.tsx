@@ -1,10 +1,7 @@
 import { useState, useEffect } from 'react'
-import { useWallet } from '@meshsdk/react'
 import { Agent } from '../types'
 import AgentCreationProgress from './AgentCreationProgress'
 import axios from 'axios'
-import { mintGenesisAgent } from '../utils/mintAgent'
-import { createAgentMetadata } from '../utils/agentMetadata'
 
 interface CreateAgentProps {
   walletAddress: string
@@ -21,9 +18,6 @@ interface MintTransaction {
 }
 
 const CreateAgent = ({ walletAddress, onAgentCreated }: CreateAgentProps) => {
-  // Use Mesh SDK's useWallet hook (like Reference project)
-  const { wallet, connected } = useWallet()
-  
   const [isCreating, setIsCreating] = useState(false)
   const [showProgress, setShowProgress] = useState(false)
   const [progressStep, setProgressStep] = useState<ProgressStep>('validating')
@@ -39,10 +33,6 @@ const CreateAgent = ({ walletAddress, onAgentCreated }: CreateAgentProps) => {
 
   // Template modal state
   const [showTemplateModal, setShowTemplateModal] = useState(false)
-
-  // Success modal state
-  const [showSuccessModal, setShowSuccessModal] = useState(false)
-  const [successTxHash, setSuccessTxHash] = useState<string | null>(null)
 
   // Form state for creating agent
   const [formData, setFormData] = useState({
@@ -70,18 +60,6 @@ const CreateAgent = ({ walletAddress, onAgentCreated }: CreateAgentProps) => {
                               formData.picture !== null;
     setAdvancedCompleted(isAdvancedComplete);
   }, [formData.personality, formData.skills, formData.picture]);
-
-  // Auto-close success modal after 20 seconds
-  useEffect(() => {
-    if (showSuccessModal) {
-      const timer = setTimeout(() => {
-        setShowSuccessModal(false)
-        setSuccessTxHash(null)
-      }, 20000) // 20 seconds
-
-      return () => clearTimeout(timer)
-    }
-  }, [showSuccessModal])
 
   // Free LLM models from Open Router
   const freeModels = [
@@ -185,111 +163,81 @@ const CreateAgent = ({ walletAddress, onAgentCreated }: CreateAgentProps) => {
         formDataToSend.append('picture', formData.picture)
       }
 
-      // API URL - Python backend on port 8000
-      const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000'
-      
-      const response = await axios.post(`${API_URL}/api/agents/create`, formDataToSend, {
+      const response = await axios.post('http://localhost:5000/api/agents/create', formDataToSend, {
         headers: {
           'Content-Type': 'multipart/form-data'
         }
       })
 
-      // Response format: { genetic_hash, masumi_did, image_ipfs_cid }
-      // Note: No ipfs_hash or personality_text - genetic data is enough
-      console.log('📦 Backend response:', response.data)
-
       // Step 3: Saving
       setProgressStep('saving')
       await new Promise(resolve => setTimeout(resolve, 800))
 
-      // Step 4: Building CIP-68 transaction (frontend)
+      // Step 4: Minting (building NFT transaction)
       setProgressStep('minting')
-      
-      try {
-        // Use wallet from useWallet hook (like Reference project)
-        if (!connected || !wallet) {
-          console.error('❌ [Wallet] Wallet not connected via useWallet hook')
-          console.error('💡 [Wallet] Please use CardanoWallet component to connect your wallet')
-          throw new Error('Wallet not connected! Please connect your wallet using the wallet button in the navigation bar.')
-        }
+      await new Promise(resolve => setTimeout(resolve, 800))
 
-        console.log('✅ [Wallet] Using wallet from useWallet hook (Mesh SDK)')
-        console.log('🔍 [Wallet] Wallet connected:', connected)
-        console.log('🔍 [Wallet] Wallet object:', wallet ? '✅ Present' : '❌ Missing')
+      const agent = response.data.agent
+      setCreatedAgent(agent)
 
-        // Create CIP-68 metadata
-        // Use genetic_data_ipfs_cid for brain_cid (so genetic data can be retrieved later)
-        const metadata = createAgentMetadata(
-          formData.name,
-          response.data.genetic_hash,  // Genetic hash for verification
-          response.data.masumi_did || '',  // Masumi DID (always generated)
-          {
-            generation: 1,  // Genesis agents are generation 1
-            xp: 0,
-            breedCount: 0,
-            geneticHash: response.data.genetic_hash,  // Genetic hash for verification
-            geneticDataIpfsCid: response.data.genetic_data_ipfs_cid,  // IPFS CID for retrieving full genetic data
-            imageIpfsCid: response.data.image_ipfs_cid  // Add image if provided
-          }
-        )
+      console.log('📦 Agent created:', createdAgent)
+      console.log('💳 Mint TX data:', response.data.mintTx)
 
-        console.log('📝 Building CIP-68 transaction...')
-        
-        // Build, sign, and submit CIP-68 transaction (matching Reference implementation)
-        const txHash = await mintGenesisAgent(wallet, metadata)
-        
-        console.log('✅ Transaction submitted successfully!', txHash)
-
-        // Store agent data with transaction hash
-        const newAgent: Agent = {
-          id: Date.now().toString(),
-          tokenId: `agent_${walletAddress.substring(0, 8)}_${Date.now()}`,
-          name: formData.name,
-          purpose: formData.purpose,
-          instructions: formData.instructions,
-          personality: formData.personality || '',  // Use form data (not from backend)
-          skills: formData.skills.split(',').map(s => s.trim()).filter(s => s),
-          llmModel: formData.llmModel,
-          generation: 1,  // Genesis agents are generation 1
-          owner: walletAddress,
-          ipfsCid: '',  // No IPFS upload
-          imageUrl: response.data.image_ipfs_cid ? `ipfs://${response.data.image_ipfs_cid}` : undefined,
-          geneticHash: response.data.genetic_hash,
-          createdAt: new Date().toISOString(),
-          minted: true,  // Transaction submitted
-          txHash: txHash
-        }
-        
-        setCreatedAgent(newAgent)
+      if (response.data.mintTx) {
+        console.log('🎁 Mint transaction ready:', response.data.mintTx.txHash)
+        setPendingMintTx(response.data.mintTx)
         
         // Step 5: Complete
         setProgressStep('complete')
         
-        // Close progress modal after a short delay
+        // Close progress modal after a short delay to show the mint modal
         setTimeout(() => {
           setShowProgress(false)
-          // Show success modal
-          setSuccessTxHash(txHash)
-          setShowSuccessModal(true)
-          // Trigger wallet refresh to fetch new agent (agents are fetched from wallet)
-          // Pass the agent for immediate UI update, but wallet will be refreshed
-          if (onAgentCreated) {
-            onAgentCreated(newAgent)
-          }
-        }, 2000)
+        }, 1000)
         
-      } catch (error: any) {
-        console.error('❌ Transaction building failed:', error)
+        // DON'T reset form or reload agents yet - wait for minting
+      } else if (response.data.mintError) {
+        // Minting failed - show error but agent was still created
+        console.error('⚠️ Mint transaction failed:', response.data.mintError)
+        
         setProgressStep('error')
         
-        // Show error, allow retry
-        if (error.message?.includes('No Cardano wallet')) {
-          setErrorMessage('No Cardano wallet found! Please install Lace wallet from https://www.lace.io/')
-        } else if (error.message?.includes('insufficient')) {
-          setErrorMessage('Insufficient funds! You need testnet ADA.\n\nGet free ADA from: https://docs.cardano.org/cardano-testnets/tools/faucet/')
+        // Check if it's a funding issue
+        if (response.data.mintError.includes('No UTXOs') || response.data.mintError.includes('no funds')) {
+          setErrorMessage(
+            '⚠️ Agent created but minting failed: Your wallet has no testnet ADA.\n\n' +
+            '🎯 Get free testnet ADA from:\nhttps://docs.cardano.org/cardano-testnets/tools/faucet/\n\n' +
+            'Your agent is saved and you can mint it later once you have funds!'
+          )
         } else {
-          setErrorMessage(`Failed to build transaction: ${error.message || 'Unknown error'}\n\nYou can try again by clicking "Create Agent" again.`)
+          setErrorMessage(`Agent created but minting failed: ${response.data.mintError}`)
         }
+        
+        // Still reload agents - agent was created successfully
+        setTimeout(() => {
+          onAgentCreated(agent)
+        }, 5000) // Give user time to read the error
+      } else {
+        console.log('⚠️ No mint transaction returned from backend')
+        
+        // Step 5: Complete
+        setProgressStep('complete')
+
+        // Reset form
+        setFormData({
+          name: '',
+          purpose: '',
+          instructions: '',
+          personality: '',
+          skills: '',
+          llmModel: 'x-ai/grok-4.1-fast:free',
+          picture: null
+        })
+
+        // Reload agents after creation
+        setTimeout(() => {
+          onAgentCreated(agent)
+        }, 1500)
       }
 
     } catch (error: any) {
@@ -377,59 +325,59 @@ const CreateAgent = ({ walletAddress, onAgentCreated }: CreateAgentProps) => {
 
                     console.log(`✅ Connected to ${walletName} wallet`)
 
-                    // Sign the transaction
+                    // Sign the transaction (CIP-30: partial=true returns witness set)
                     console.log('📝 Signing transaction with wallet...')
                     console.log('   Unsigned TX length:', pendingMintTx.unsignedTx.length)
+                    console.log('   Unsigned TX (first 100 chars):', pendingMintTx.unsignedTx.substring(0, 100))
                     
-                    // Sign transaction (returns signed transaction)
-                    const signedTx = await walletApi.signTx(pendingMintTx.unsignedTx, true)
+                    // partial=true returns witness set that backend will combine
+                    const witnessSet = await walletApi.signTx(pendingMintTx.unsignedTx, true)
                     console.log('✅ Transaction signed by wallet!')
+                    console.log('   Witness set length:', witnessSet.length)
+                    console.log('   Witness set (first 100 chars):', witnessSet.substring(0, 100))
 
-                    // Submit directly to Cardano network (no backend needed)
-                    console.log('📤 Submitting to Cardano network...')
-                    const txHash = await walletApi.submitTx(signedTx)
+                    // Submit to blockchain via backend
+                    console.log('📤 Submitting to blockchain...')
+                    const response = await axios.post('http://localhost:5000/api/submit-tx', {
+                      unsignedTx: pendingMintTx.unsignedTx,
+                      witnessSet: witnessSet
+                    })
+
+                    console.log('✅ Transaction submitted!', response.data)
                     
-                    console.log('✅ Transaction submitted!', txHash)
+                    // Update agent status in backend
+                    if (createdAgent?.id) {
+                      try {
+                        await axios.post(`http://localhost:5000/api/agents/${createdAgent.id}/mint-complete`, {
+                          txHash: response.data.txHash
+                        })
+                        console.log('✅ Agent marked as minted in backend')
+                      } catch (updateError) {
+                        console.error('⚠️ Failed to update agent mint status:', updateError)
+                        // Continue anyway - transaction succeeded
+                      }
+                    }
                     
                     alert(
-                      `🎉 NFT Minted!\n\n` +
-                      `Transaction: ${txHash}\n` +
-                      `Network: preprod\n\n` +
-                      `Your agent will appear in your ${walletName} wallet in 2-3 minutes.\n\n` +
-                      `Check CardanoScan: https://preprod.cardanoscan.io/transaction/${txHash}`
+                      `🎉 NFT Minting Started!\n\n` +
+                      `Transaction: ${response.data.txHash}\n` +
+                      `Network: ${response.data.network || 'preprod'}\n\n` +
+                      `Your NFT will appear in your ${walletName} wallet in 2-3 minutes.\n\n` +
+                      `Check CardanoScan: https://preprod.cardanoscan.io/transaction/${response.data.txHash}`
                     )
 
                     // Update local state
                     if (createdAgent) {
                       createdAgent.minted = true
-                      createdAgent.txHash = txHash
+                      createdAgent.txHash = response.data.txHash
                     }
 
                     setPendingMintTx(null)
                     setCreatedAgent(null)
                     
-                    // Reset form
-                    setFormData({
-                      name: '',
-                      purpose: '',
-                      instructions: '',
-                      personality: '',
-                      skills: '',
-                      llmModel: 'x-ai/grok-4.1-fast:free',
-                      picture: null
-                    })
-                    
-                    // Reload agents from wallet (not backend - agents are on-chain)
-                    // Agent is now minted on-chain, frontend will fetch from wallet
+                    // Reload agents to show updated status
                     setTimeout(() => {
-                      // Trigger refresh - agent will be fetched from wallet
-                      // Create a minimal agent object for the callback
-                      const mintedAgent: Agent = {
-                        ...createdAgent!,
-                        minted: true,
-                        txHash: txHash
-                      }
-                      onAgentCreated(mintedAgent)
+                      onAgentCreated(createdAgent)
                     }, 3000)
                   } catch (error: any) {
                     console.error('❌ Wallet signing failed:', error)
@@ -463,76 +411,6 @@ const CreateAgent = ({ walletAddress, onAgentCreated }: CreateAgentProps) => {
                 <strong>ℹ️  What's happening?</strong> Your agent is being minted as an NFT on the Cardano testnet.
                 This NFT will live in your Lace wallet and can be viewed on blockchain explorers.
               </p>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Success Modal */}
-      {showSuccessModal && successTxHash && (
-        <div className="modal-overlay" style={{ zIndex: 9999 }}>
-          <div className="modal-content success-modal">
-            <div className="modal-header">
-              <h2>✅ Agent Created Successfully!</h2>
-              <button
-                className="close-btn"
-                onClick={() => {
-                  setShowSuccessModal(false)
-                  setSuccessTxHash(null)
-                }}
-                title="Close"
-              >
-                ×
-              </button>
-            </div>
-
-            <div className="success-content">
-              <div className="success-icon">
-                <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <circle cx="12" cy="12" r="10"/>
-                  <polyline points="9,12 12,15 15,12"/>
-                  <line x1="12" y1="15" x2="12" y2="3"/>
-                </svg>
-              </div>
-
-              <div className="success-details">
-                <div className="success-info-row">
-                  <span className="label">Transaction Hash:</span>
-                  <span className="value">{successTxHash}</span>
-                </div>
-                
-                <div className="success-info-box">
-                  <p>
-                    <strong>ℹ️ What's next?</strong>
-                  </p>
-                  <p>
-                    Your agent has been successfully minted as an NFT on the Cardano testnet.
-                    The transaction may take 30-60 seconds to appear on CardanoScan.
-                  </p>
-                  <p>
-                    <a 
-                      href={`https://preprod.cardanoscan.io/transaction/${successTxHash}`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="cardanoscan-link"
-                    >
-                      View on CardanoScan →
-                    </a>
-                  </p>
-                </div>
-              </div>
-            </div>
-
-            <div className="success-actions">
-              <button
-                className="success-btn primary"
-                onClick={() => {
-                  setShowSuccessModal(false)
-                  setSuccessTxHash(null)
-                }}
-              >
-                Got it!
-              </button>
             </div>
           </div>
         </div>
@@ -863,6 +741,7 @@ const CreateAgent = ({ walletAddress, onAgentCreated }: CreateAgentProps) => {
           font-size: 0.9rem;
           cursor: pointer;
           transition: all 0.2s;
+          outline: none;
         }
 
         .template-btn:hover {
@@ -1699,150 +1578,6 @@ const CreateAgent = ({ walletAddress, onAgentCreated }: CreateAgentProps) => {
           border-color: rgba(100, 116, 139, 0.3);
           color: #64748b;
           cursor: not-allowed;
-        }
-
-        /* Success Modal Styles */
-        .success-modal {
-          background: linear-gradient(135deg, rgba(30, 41, 59, 0.95) 0%, rgba(15, 23, 42, 0.95) 100%);
-          border: 1px solid rgba(34, 197, 94, 0.3);
-          border-radius: 12px;
-          padding: 2rem;
-          max-width: 500px;
-          width: 90%;
-          box-shadow: 0 20px 25px rgba(0, 0, 0, 0.3);
-          animation: slideUp 0.3s ease-out;
-        }
-
-        @keyframes slideUp {
-          from {
-            opacity: 0;
-            transform: translateY(20px);
-          }
-          to {
-            opacity: 1;
-            transform: translateY(0);
-          }
-        }
-
-        .success-modal .modal-header {
-          display: flex;
-          align-items: center;
-          justify-content: space-between;
-          margin-bottom: 1.5rem;
-          padding-bottom: 1rem;
-          border-bottom: 1px solid rgba(34, 197, 94, 0.2);
-        }
-
-        .success-modal .modal-header h2 {
-          color: #22c55e;
-          margin: 0;
-          font-size: 1.5rem;
-        }
-
-        .success-content {
-          text-align: center;
-        }
-
-        .success-icon {
-          display: flex;
-          justify-content: center;
-          margin-bottom: 1.5rem;
-          color: #22c55e;
-        }
-
-        .success-icon svg {
-          filter: drop-shadow(0 0 10px rgba(34, 197, 94, 0.5));
-        }
-
-        .success-details {
-          margin-bottom: 1.5rem;
-        }
-
-        .success-info-row {
-          display: flex;
-          flex-direction: column;
-          gap: 0.5rem;
-          background: rgba(255, 255, 255, 0.05);
-          border-radius: 8px;
-          padding: 1rem;
-          margin-bottom: 1rem;
-        }
-
-        .success-info-row .label {
-          color: #94a3b8;
-          font-size: 0.9rem;
-          font-weight: 500;
-        }
-
-        .success-info-row .value {
-          color: #cbd5e1;
-          font-size: 0.85rem;
-          font-family: 'Courier New', monospace;
-          word-break: break-all;
-        }
-
-        .success-info-box {
-          background: rgba(34, 197, 94, 0.1);
-          border: 1px solid rgba(34, 197, 94, 0.3);
-          border-radius: 8px;
-          padding: 1rem;
-          text-align: left;
-        }
-
-        .success-info-box p {
-          margin: 0.5rem 0;
-          color: #cbd5e1;
-          font-size: 0.9rem;
-          line-height: 1.5;
-        }
-
-        .success-info-box p:first-child {
-          margin-top: 0;
-        }
-
-        .success-info-box p:last-child {
-          margin-bottom: 0;
-        }
-
-        .success-info-box strong {
-          color: #86efac;
-        }
-
-        .cardanoscan-link {
-          color: #60a5fa;
-          text-decoration: none;
-          font-weight: 600;
-          transition: color 0.2s;
-        }
-
-        .cardanoscan-link:hover {
-          color: #93c5fd;
-          text-decoration: underline;
-        }
-
-        .success-actions {
-          display: flex;
-          justify-content: center;
-        }
-
-        .success-btn {
-          padding: 0.875rem 2rem;
-          border: none;
-          border-radius: 8px;
-          font-weight: 600;
-          font-size: 1rem;
-          cursor: pointer;
-          transition: all 0.2s;
-        }
-
-        .success-btn.primary {
-          background: linear-gradient(135deg, #22c55e 0%, #16a34a 100%);
-          color: white;
-        }
-
-        .success-btn.primary:hover {
-          transform: translateY(-2px);
-          box-shadow: 0 4px 12px rgba(34, 197, 94, 0.4);
         }
       `}</style>
     </div>

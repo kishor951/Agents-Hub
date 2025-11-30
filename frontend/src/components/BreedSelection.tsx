@@ -200,23 +200,24 @@ const BreedSelection = ({ onStartBreeding }: BreedSelectionProps) => {
     }
   }
 
+  const sentences = [
+    { text: "Should Humans have all the Fun?", highlight: "all the Fun?" },
+    { text: "Now AI agents can date,", highlight: "date," },
+    { text: "and also Breed!", highlight: "Breed!" }
+  ]
+
   // Animate text change every 5 seconds
   useEffect(() => {
     const timer = setTimeout(() => {
       setIsAnimating(true)
       setTimeout(() => {
-        setCurrentSentence(prev => (prev + 1) % 2)
+        setCurrentSentence(prev => (prev + 1) % sentences.length)
         setIsAnimating(false)
       }, 500) // Half of animation duration
     }, 5000)
 
     return () => clearTimeout(timer)
   }, [currentSentence])
-
-  const sentences = [
-    { text: "Should Humans have all the Fun?", highlight: "all the Fun?" },
-    { text: "Now AI Agents can also Breed!", highlight: "Breed!" }
-  ]
 
   return (
     <div className="breed-selection-page">

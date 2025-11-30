@@ -33,20 +33,39 @@ async def breed_agents(request: BreedAgentsRequest):
     generates purpose and instructions, and returns complete child genetic data.
     """
     try:
+        print(f"🧬 [Breed] Starting breeding process...")
+        print(f"   Parent A Asset ID: {request.parent_a_asset_id}")
+        print(f"   Parent B Asset ID: {request.parent_b_asset_id}")
+        print(f"   Child Name: {request.child_name}")
+        print(f"   Custom Instructions: {request.custom_instructions or 'None'}")
+        print(f"   Predicted Skills: {request.predicted_skills or []}")
+        
         # Fetch parent A metadata and genetic data
+        print(f"🔍 [Breed] Fetching Parent A metadata...")
         parent_a_metadata = fetch_agent_metadata(request.parent_a_asset_id)
         parent_a_properties = extract_properties_from_metadata(parent_a_metadata)
         parent_a_cid = parent_a_properties.get("brain_cid", "").replace("ipfs://", "").replace("genetic://", "")
+        
+        print(f"   Parent A brain_cid: {parent_a_cid[:30] if parent_a_cid else 'NOT FOUND'}...")
         
         if not parent_a_cid:
             raise HTTPException(status_code=400, detail="Parent A: brain_cid not found in metadata")
         
         # Fetch full genetic data for parent A (includes name, purpose, instructions, personality, skills, llmModel)
+        print(f"📥 [Breed] Fetching Parent A genetic data from IPFS...")
         parent_a_genetic_data_json = fetch_agent_personality(parent_a_cid)  # This returns the full genetic data JSON
         try:
             parent_a_genetic_data = json.loads(parent_a_genetic_data_json)
-        except:
+            print(f"✅ [Breed] Parent A genetic data parsed successfully:")
+            print(f"   - Name: {parent_a_genetic_data.get('name', 'N/A')}")
+            print(f"   - Purpose: {parent_a_genetic_data.get('purpose', '')[:50] if parent_a_genetic_data.get('purpose') else 'N/A'}...")
+            print(f"   - Instructions: {len(parent_a_genetic_data.get('instructions', ''))} chars")
+            print(f"   - Personality: {len(parent_a_genetic_data.get('personality', ''))} chars")
+            print(f"   - Skills: {len(parent_a_genetic_data.get('skills', []))} skills")
+            print(f"   - LLM Model: {parent_a_genetic_data.get('llmModel', 'N/A')}")
+        except Exception as e:
             # If it's not JSON, treat as personality only (legacy format)
+            print(f"⚠️  [Breed] Parent A genetic data is not JSON (legacy format): {e}")
             parent_a_genetic_data = {
                 "personality": parent_a_genetic_data_json,
                 "purpose": "",
@@ -56,19 +75,31 @@ async def breed_agents(request: BreedAgentsRequest):
             }
         
         # Fetch parent B metadata and genetic data
+        print(f"🔍 [Breed] Fetching Parent B metadata...")
         parent_b_metadata = fetch_agent_metadata(request.parent_b_asset_id)
         parent_b_properties = extract_properties_from_metadata(parent_b_metadata)
         parent_b_cid = parent_b_properties.get("brain_cid", "").replace("ipfs://", "").replace("genetic://", "")
+        
+        print(f"   Parent B brain_cid: {parent_b_cid[:30] if parent_b_cid else 'NOT FOUND'}...")
         
         if not parent_b_cid:
             raise HTTPException(status_code=400, detail="Parent B: brain_cid not found in metadata")
         
         # Fetch full genetic data for parent B
+        print(f"📥 [Breed] Fetching Parent B genetic data from IPFS...")
         parent_b_genetic_data_json = fetch_agent_personality(parent_b_cid)
         try:
             parent_b_genetic_data = json.loads(parent_b_genetic_data_json)
-        except:
+            print(f"✅ [Breed] Parent B genetic data parsed successfully:")
+            print(f"   - Name: {parent_b_genetic_data.get('name', 'N/A')}")
+            print(f"   - Purpose: {parent_b_genetic_data.get('purpose', '')[:50] if parent_b_genetic_data.get('purpose') else 'N/A'}...")
+            print(f"   - Instructions: {len(parent_b_genetic_data.get('instructions', ''))} chars")
+            print(f"   - Personality: {len(parent_b_genetic_data.get('personality', ''))} chars")
+            print(f"   - Skills: {len(parent_b_genetic_data.get('skills', []))} skills")
+            print(f"   - LLM Model: {parent_b_genetic_data.get('llmModel', 'N/A')}")
+        except Exception as e:
             # If it's not JSON, treat as personality only (legacy format)
+            print(f"⚠️  [Breed] Parent B genetic data is not JSON (legacy format): {e}")
             parent_b_genetic_data = {
                 "personality": parent_b_genetic_data_json,
                 "purpose": "",
@@ -103,10 +134,15 @@ async def breed_agents(request: BreedAgentsRequest):
         gemini_client = get_gemini_client()
         
         # Generate child purpose (AI decides mix, no trait balance)
+        print(f"📝 [Breed] Generating child purpose using Gemini AI...")
+        print(f"   Parent A Purpose: {parent_a_genetic_data.get('purpose', '')[:100] if parent_a_genetic_data.get('purpose') else 'None'}...")
+        print(f"   Parent B Purpose: {parent_b_genetic_data.get('purpose', '')[:100] if parent_b_genetic_data.get('purpose') else 'None'}...")
+        
         purpose_prompt = f"""
 Parent A Purpose: {parent_a_genetic_data.get("purpose", "")}
 Parent B Purpose: {parent_b_genetic_data.get("purpose", "")}
 Custom Instructions: {request.custom_instructions or "None"}
+Your Name: {request.child_name}
 
 Create a unique purpose for the child agent that combines both parents' purposes.
 The AI should decide the optimal mix of traits from both parents.
@@ -115,29 +151,42 @@ Keep it concise (1-2 sentences).
         try:
             purpose_response = gemini_client.generate_content(purpose_prompt)
             child_purpose = purpose_response.text.strip()
+            print(f"✅ [Breed] Child purpose generated successfully!")
+            print(f"   - Purpose: {child_purpose[:150]}...")
         except Exception as e:
             print(f"⚠️ [Breed] Failed to generate purpose, using fallback: {e}")
             # Fallback: Combine parent purposes
             child_purpose = f"Combined purpose from {parent_a_genetic_data.get('purpose', 'Parent A')} and {parent_b_genetic_data.get('purpose', 'Parent B')}"
+            print(f"   - Fallback purpose: {child_purpose[:150]}...")
         
         # Generate child instructions (AI decides mix, no trait balance)
+        print(f"📝 [Breed] Generating child instructions using Gemini AI...")
+        print(f"   Parent A Instructions: {parent_a_genetic_data.get('instructions', '')[:100] if parent_a_genetic_data.get('instructions') else 'None'}...")
+        print(f"   Parent B Instructions: {parent_b_genetic_data.get('instructions', '')[:100] if parent_b_genetic_data.get('instructions') else 'None'}...")
+        print(f"   Custom Breeding Instructions: {request.custom_instructions[:100] if request.custom_instructions else 'None'}...")
+        
         instructions_prompt = f"""
 Parent A Instructions: {parent_a_genetic_data.get("instructions", "")}
 Parent B Instructions: {parent_b_genetic_data.get("instructions", "")}
 Custom Breeding Instructions: {request.custom_instructions or "None"}
+Your Name: {request.child_name}
 
-Create detailed instructions for the child agent that combine both parents' instructions.
+Create detailed instructions for the new agent that combine both parents' instructions.
 The AI should decide the optimal mix of approaches from both parents.
 Include the custom breeding instructions if provided.
-Keep it comprehensive but clear.
+Keep it comprehensive but clear. Just give me the instructions, no other text.
 """
         try:
             instructions_response = gemini_client.generate_content(instructions_prompt)
             child_instructions = instructions_response.text.strip()
+            print(f"✅ [Breed] Child instructions generated successfully!")
+            print(f"   - Length: {len(child_instructions)} chars")
+            print(f"   - Preview: {child_instructions[:150]}...")
         except Exception as e:
             print(f"⚠️ [Breed] Failed to generate instructions, using fallback: {e}")
             # Fallback: Combine parent instructions
             child_instructions = f"Follow instructions from both parents: {parent_a_genetic_data.get('instructions', '')} and {parent_b_genetic_data.get('instructions', '')}"
+            print(f"   - Fallback instructions: {child_instructions[:150]}...")
         
         # Prepare child genetic data (full structure)
         child_genetic_data = {
@@ -150,12 +199,42 @@ Keep it comprehensive but clear.
             "timestamp": datetime.utcnow().isoformat() + "Z"
         }
         
+        print(f"🧬 [Breed] Child genetic data prepared:")
+        print(f"   - Name: {child_genetic_data.get('name')}")
+        print(f"   - Purpose: {child_genetic_data.get('purpose', '')[:50]}...")
+        print(f"   - Instructions: {len(child_genetic_data.get('instructions', ''))} chars")
+        print(f"   - Personality: {len(child_genetic_data.get('personality', ''))} chars")
+        print(f"   - Skills: {len(child_genetic_data.get('skills', []))} skills - {child_genetic_data.get('skills', [])}")
+        print(f"   - LLM Model: {child_genetic_data.get('llmModel')}")
+        print(f"   - Timestamp: {child_genetic_data.get('timestamp')}")
+        
         # Upload child genetic data to IPFS
         child_genetic_data_json = json.dumps(child_genetic_data, sort_keys=True, ensure_ascii=False)
-        child_ipfs_hash = upload_to_ipfs(child_genetic_data_json)
+        print(f"📤 [Breed] Uploading child genetic data to IPFS...")
+        print(f"   - JSON size: {len(child_genetic_data_json)} bytes")
+        
+        try:
+            child_ipfs_hash = upload_to_ipfs(child_genetic_data_json)
+            print(f"✅ [Breed] Child genetic data uploaded to IPFS successfully!")
+            print(f"   - IPFS CID: {child_ipfs_hash}")
+            print(f"   - Full IPFS URL: ipfs://{child_ipfs_hash}")
+        except Exception as e:
+            print(f"❌ [Breed] Failed to upload child genetic data to IPFS: {e}")
+            raise HTTPException(
+                status_code=500,
+                detail=f"Failed to upload child genetic data to IPFS: {str(e)}"
+            )
         
         # Generate Masumi DID
         masumi_did = generate_masumi_did()
+        print(f"🆔 [Breed] Generated Masumi DID: {masumi_did}")
+        
+        print(f"✅ [Breed] Breeding complete! Returning response:")
+        print(f"   - IPFS Hash: {child_ipfs_hash}")
+        print(f"   - Masumi DID: {masumi_did}")
+        print(f"   - Child Name: {request.child_name}")
+        print(f"   - Child Purpose: {child_purpose[:50]}...")
+        print(f"   - Child Skills: {request.predicted_skills or []}")
         
         return BreedAgentsResponse(
             ipfs_hash=child_ipfs_hash,

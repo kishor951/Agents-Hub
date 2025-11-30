@@ -263,8 +263,11 @@ export async function mintBredAgent(
   }
 
   // Generate unique asset name (can include generation in name)
-  const generation = metadata.properties?.generation ?? 0;
-  const prefix = generation > 0 ? `AgentGen${generation}` : "Agent";
+  // Genesis agents are generation 1, treat 0 as 1 for legacy agents
+  const generation = metadata.properties?.generation && metadata.properties.generation > 0 
+    ? metadata.properties.generation 
+    : 1;
+  const prefix = `AgentGen${generation}`;
   const uniqueHandle = generateAssetName(prefix);
 
   const unsignedTx = await cip68Contract.mint({

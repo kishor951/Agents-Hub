@@ -169,22 +169,29 @@ def get_agent(asset_id: str):
         
         if properties:
             brain_cid_raw = properties.get("brain_cid")
+            print(f"🔍 [Get Agent] Found brain_cid in properties: {brain_cid_raw[:50] if brain_cid_raw else 'None'}...")
+            
             if brain_cid_raw:
                 # Remove ipfs:// prefix if present
                 brain_cid = brain_cid_raw[7:] if brain_cid_raw.startswith("ipfs://") else brain_cid_raw
                 # Also handle genetic:// prefix (for legacy agents without IPFS upload)
                 if brain_cid_raw.startswith("genetic://"):
                     print(f"⚠️  [Get Agent] Legacy agent with genetic:// hash - genetic data not available")
+                    print(f"   - brain_cid_raw: {brain_cid_raw}")
                     brain_cid = None  # No IPFS content for genetic-only agents
                 else:
+                    print(f"📥 [Get Agent] Fetching genetic data from IPFS...")
+                    print(f"   - brain_cid (cleaned): {brain_cid[:50]}...")
                     try:
                         # Fetch genetic data from IPFS
                         # fetch_from_ipfs() returns the "text" field content (already unwrapped)
                         genetic_data_json_str = fetch_from_ipfs(brain_cid)
+                        print(f"✅ [Get Agent] Fetched data from IPFS, size: {len(genetic_data_json_str)} chars")
                         
                         # Parse the JSON string to get genetic_data dict
                         try:
                             genetic_data = json.loads(genetic_data_json_str)
+                            print(f"✅ [Get Agent] Genetic data parsed as JSON successfully")
                             
                             # Extract all fields from genetic data
                             personality = genetic_data.get("personality")
@@ -193,20 +200,29 @@ def get_agent(asset_id: str):
                             skills = genetic_data.get("skills", [])
                             llm_model = genetic_data.get("llmModel")
                             
-                            print(f"✅ [Get Agent] Fetched genetic data from IPFS")
-                            print(f"   - Name: {genetic_data.get('name')}")
+                            print(f"✅ [Get Agent] Extracted genetic data fields:")
+                            print(f"   - Name: {genetic_data.get('name', 'N/A')}")
                             print(f"   - Purpose: {purpose[:50] if purpose else 'N/A'}...")
+                            print(f"   - Instructions: {instructions[:50] if instructions else 'N/A'}...")
                             print(f"   - Personality: {len(personality) if personality else 0} chars")
-                            print(f"   - Skills: {len(skills)} skills")
-                            print(f"   - LLM Model: {llm_model}")
+                            print(f"   - Skills: {len(skills)} skills - {skills}")
+                            print(f"   - LLM Model: {llm_model or 'N/A'}")
+                            print(f"   - Timestamp: {genetic_data.get('timestamp', 'N/A')}")
                         except json.JSONDecodeError as e:
                             # If it's not valid JSON, treat as plain text personality (legacy format)
                             print(f"⚠️  [Get Agent] IPFS content is not valid JSON, treating as personality text: {e}")
+                            print(f"   - Content preview: {genetic_data_json_str[:100]}...")
                             personality = genetic_data_json_str
                             genetic_data = None
                     except Exception as e:
-                        print(f"⚠️  [Get Agent] Failed to fetch genetic data from IPFS: {e}")
+                        print(f"❌ [Get Agent] Failed to fetch genetic data from IPFS: {e}")
+                        print(f"   - brain_cid: {brain_cid}")
+                        print(f"   - Error type: {type(e).__name__}")
                         genetic_data = None
+            else:
+                print(f"⚠️  [Get Agent] No brain_cid found in properties")
+        else:
+            print(f"⚠️  [Get Agent] No properties found in metadata")
         
         # Get name from onchain_metadata
         name = None
@@ -255,7 +271,7 @@ def get_agent(asset_id: str):
             "personality": str(personality) if personality else None,  # From genetic data
             "skills": skills if isinstance(skills, list) else [],  # From genetic data
             "llm_model": llm_model,  # From genetic data
-            "generation": int(properties.get("generation", 0)) if properties else 0,
+            "generation": int(properties.get("generation", 1)) if properties else 1,  # Genesis agents are generation 1
             "xp": int(properties.get("xp", 0)) if properties else 0,
             "breed_count": int(properties.get("breed_count", 0)) if properties else 0,
             "brain_cid": str(brain_cid) if brain_cid else None,
@@ -264,7 +280,6 @@ def get_agent(asset_id: str):
             "parents": parents,
             "mint_tx_hash": mint_tx_hash
         }
-        response["generation"] = response["generation"] + 1
         
         print(f"✅ [Get Agent] Returning agent data for {asset_id[:30]}...")
         return response

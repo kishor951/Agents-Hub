@@ -163,6 +163,97 @@ const LandingPage = () => {
           gap: 2rem;
         }
 
+        .meme-container {
+          position: relative;
+          display: flex;
+          align-items: center;
+          gap: 1rem;
+        }
+
+        .meme-nav {
+          background: rgba(255, 255, 255, 0.1);
+          border: none;
+          border-radius: 50%;
+          width: 40px;
+          height: 40px;
+          color: white;
+          font-size: 1.5rem;
+          cursor: pointer;
+          transition: all 0.3s ease;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+        }
+
+        .meme-nav:hover {
+          background: rgba(0, 240, 255, 0.2);
+          transform: scale(1.1);
+        }
+
+        .meme-card {
+          background: rgba(255, 255, 255, 0.05);
+          backdrop-filter: blur(10px);
+          border: 1px solid rgba(255, 255, 255, 0.1);
+          border-radius: 20px;
+          padding: 2rem;
+          text-align: center;
+          min-width: 300px;
+          transition: all 0.3s ease;
+        }
+
+        .meme-card:hover {
+          transform: translateY(-5px);
+          border-color: rgba(0, 240, 255, 0.3);
+          box-shadow: 0 10px 40px rgba(0, 240, 255, 0.2);
+        }
+
+        .meme-emoji {
+          font-size: 4rem;
+          margin-bottom: 1rem;
+        }
+
+        .meme-title {
+          font-size: 1.5rem;
+          font-weight: 700;
+          font-family: 'Orbitron', sans-serif;
+          color: #00F0FF;
+          margin-bottom: 0.5rem;
+        }
+
+        .meme-subtitle {
+          font-size: 1.125rem;
+          font-weight: 600;
+          color: rgba(255, 255, 255, 0.9);
+          margin-bottom: 1rem;
+          font-family: 'Space Mono', monospace;
+        }
+
+        .meme-description {
+          font-size: 0.875rem;
+          color: rgba(255, 255, 255, 0.7);
+          line-height: 1.5;
+        }
+
+        .meme-indicators {
+          display: flex;
+          gap: 0.5rem;
+        }
+
+        .indicator {
+          width: 12px;
+          height: 12px;
+          border-radius: 50%;
+          border: none;
+          background: rgba(255, 255, 255, 0.3);
+          cursor: pointer;
+          transition: all 0.3s ease;
+        }
+
+        .indicator.active {
+          background: #00F0FF;
+          transform: scale(1.2);
+        }
+
         .features-section {
           padding: 4rem 2rem;
           max-width: 1400px;
@@ -242,6 +333,10 @@ const LandingPage = () => {
 
           .features-grid {
             grid-template-columns: 1fr;
+          }
+
+          .meme-card {
+            min-width: 250px;
           }
         }
       `}</style>

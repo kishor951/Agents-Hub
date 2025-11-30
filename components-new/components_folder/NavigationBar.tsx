@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react'
 import { Link, useNavigate, useLocation } from 'react-router-dom'
-import { CardanoWallet, useWallet } from '@meshsdk/react'
+import WalletConnect from './WalletConnect'
 import Logo from './Logo'
 
 interface NavigationBarProps {
@@ -10,38 +10,6 @@ interface NavigationBarProps {
 }
 
 const NavigationBar = ({ walletAddress, onConnect, onDisconnect }: NavigationBarProps) => {
-  // Use Mesh SDK's useWallet hook (like Reference project)
-  const { wallet, connected } = useWallet()
-  const [meshWalletAddress, setMeshWalletAddress] = useState<string | null>(null)
-  
-  // Get wallet address from Mesh SDK wallet
-  useEffect(() => {
-    const getWalletAddress = async () => {
-      if (connected && wallet) {
-        try {
-          const addresses = await wallet.getUsedAddresses()
-          if (addresses && addresses.length > 0) {
-            setMeshWalletAddress(addresses[0])
-            if (onConnect && addresses[0] !== walletAddress) {
-              onConnect(addresses[0])
-            }
-          }
-        } catch (error) {
-          console.error('Failed to get wallet address:', error)
-        }
-      } else {
-        setMeshWalletAddress(null)
-        if (onDisconnect && walletAddress) {
-          onDisconnect()
-        }
-      }
-    }
-    getWalletAddress()
-  }, [connected, wallet, walletAddress, onConnect, onDisconnect])
-  
-  // Use Mesh SDK wallet address if available, otherwise fall back to prop
-  const currentWalletAddress = meshWalletAddress || walletAddress
-  
   const [showDropdown, setShowDropdown] = useState(false)
   const [toastMessage, setToastMessage] = useState('')
   const dropdownRef = useRef<HTMLDivElement>(null)
@@ -111,7 +79,7 @@ const NavigationBar = ({ walletAddress, onConnect, onDisconnect }: NavigationBar
 
       {/* Right: Navigation Tabs + Wallet Profile */}
       <div className="nav-right">
-        {currentWalletAddress && (
+        {walletAddress && (
           <div className="nav-tabs">
             <Link
               to="/dashboard"
@@ -188,9 +156,9 @@ const NavigationBar = ({ walletAddress, onConnect, onDisconnect }: NavigationBar
             </div>
           </div>
         )}
-        {!currentWalletAddress ? (
+        {!walletAddress ? (
           <div className="wallet-connect-nav">
-            <CardanoWallet />
+            <WalletConnect onConnect={onConnect} onDisconnect={onDisconnect} />
           </div>
         ) : (
           <div className="wallet-profile-container" ref={dropdownRef}>
@@ -199,15 +167,15 @@ const NavigationBar = ({ walletAddress, onConnect, onDisconnect }: NavigationBar
               ref={profileButtonRef}
               className="profile-button"
               onClick={() => setShowDropdown(!showDropdown)}
-              title={currentWalletAddress}
+              title={walletAddress}
             >
               <div
                 className="profile-avatar"
-                style={{ backgroundColor: generateAvatar(currentWalletAddress) }}
+                style={{ backgroundColor: generateAvatar(walletAddress) }}
               >
                 <span className="avatar-icon">👛</span>
               </div>
-              <span className="profile-address">{formatAddress(currentWalletAddress)}</span>
+              <span className="profile-address">{formatAddress(walletAddress)}</span>
               <span className="dropdown-chevron">
                 {showDropdown ? '▼' : '▶'}
               </span>
@@ -223,10 +191,8 @@ const NavigationBar = ({ walletAddress, onConnect, onDisconnect }: NavigationBar
                   <button
                     className="dropdown-action copy-address"
                     onClick={() => {
-                      if (currentWalletAddress) {
-                        navigator.clipboard.writeText(currentWalletAddress)
-                        showToastNotification('Address copied!')
-                      }
+                      navigator.clipboard.writeText(walletAddress)
+                      showToastNotification('Address copied!')
                     }}
                   >
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -238,10 +204,8 @@ const NavigationBar = ({ walletAddress, onConnect, onDisconnect }: NavigationBar
                   <button
                     className="dropdown-action view-explorer"
                     onClick={() => {
-                      if (currentWalletAddress) {
-                        const explorerUrl = `https://testnet.cardanoscan.io/address/${currentWalletAddress}`
-                        window.open(explorerUrl, '_blank')
-                      }
+                      const explorerUrl = `https://testnet.cardanoscan.io/address/${walletAddress}`
+                      window.open(explorerUrl, '_blank')
                     }}
                   >
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">

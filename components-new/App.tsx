@@ -1,8 +1,6 @@
 import { useState } from 'react'
 import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from 'react-router-dom'
 import * as React from 'react'
-import { MeshProvider } from '@meshsdk/react'
-import '@meshsdk/react/styles.css'
 import './App.css'
 import NavigationBar from './components/NavigationBar'
 import Dashboard from './components/Dashboard'
@@ -26,7 +24,7 @@ function AppContent() {
   // Determine if we're on a create page
   const isCreatePage = location.pathname.startsWith('/create') || location.pathname.startsWith('/breed')
   
-  // Apply create-mode class to body element and change favicon
+  // Apply create-mode class to body element
   React.useEffect(() => {
     if (isCreatePage) {
       document.body.classList.add('create-mode')
@@ -124,6 +122,7 @@ function AppContent() {
                 walletAddress ? (
                   !selectedParents[0] ? (
                     <BreedSelection 
+                      walletAddress={walletAddress}
                       onStartBreeding={handleStartBreeding}
                     />
                   ) : (
@@ -131,6 +130,7 @@ function AppContent() {
                       <BreedScreen 
                         parentA={selectedParents[0]}
                         parentB={selectedParents[1]}
+                        walletAddress={walletAddress}
                         onFusionComplete={handleFusionComplete}
                         onBack={handleBackToDashboard}
                       />
@@ -188,11 +188,9 @@ function AppContent() {
 
 function App() {
   return (
-    <MeshProvider>
-      <Router>
-        <AppContent />
-      </Router>
-    </MeshProvider>
+    <Router>
+      <AppContent />
+    </Router>
   )
 }
 
